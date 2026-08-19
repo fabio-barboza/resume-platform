@@ -1,0 +1,8 @@
+# Scripts de subida são ferramenta, não o projeto: fora da barra de linguagens
+# do GitHub, senão os ~1.300 linhas de bash/PowerShell competem com o código.
+start.sh    linguist-detectable=false
+start.ps1   linguist-detectable=false
+start.bat   linguist-detectable=false
+
+# Template do Alembic (Mako), gerado pela ferramenta
+resume-agent/migrations/script.py.mako   linguist-generated=true
