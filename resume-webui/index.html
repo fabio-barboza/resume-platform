@@ -3,7 +3,20 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Resume Agent</title>
+<title>Resume Agent · Triagem de currículos com IA</title>
+<meta name="description" content="Agente de triagem de currículos: pergunte sobre a base de candidatos e visualize o PDF na hora." />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='6' y1='4' x2='42' y2='44' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1.5' y='1.5' width='45' height='45' rx='13' fill='url(%23g)'/%3E%3Cpath d='M16 11h11l7 7v16a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V14a3 3 0 0 1 3-3z' fill='%23fff'/%3E%3Cpath d='M27 11l7 7h-7z' fill='%23c7d2fe'/%3E%3Cpath d='M18.5 23.5h10M18.5 28.5h5.5' stroke='%236366f1' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='33' cy='34' r='8.5' fill='%23fff'/%3E%3Cpath d='M29.2 34.2l2.6 2.6 4.9-5.4' stroke='url(%23g)' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script>
+  // Aplica o tema antes do primeiro paint para evitar flash de tema errado
+  (function () {
+    var saved = localStorage.getItem('theme')
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    document.documentElement.setAttribute('data-theme', theme)
+  })()
+</script>
 </head>
 <body>
 <div id="app"></div>
