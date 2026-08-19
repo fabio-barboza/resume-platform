@@ -1,0 +1,30 @@
+# Logs dos scripts de subida
+logs/
+
+# Saidas do Playwright MCP (snapshots e screenshots de sessao)
+.playwright-mcp/
+
+# Python
+__pycache__/
+*.py[oc]
+.venv/
+build/
+wheels/
+*.egg-info
+.pytest_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+dist/
+
+# Variáveis de ambiente locais (o .env.example é versionado)
+.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Config local do Claude Code
+.claude/

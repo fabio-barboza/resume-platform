@@ -1,0 +1,10 @@
+# Dependências e build
+node_modules/
+dist/
+
+# Variáveis de ambiente locais
+.env
+
+# IDE
+.idea/
+.vscode/

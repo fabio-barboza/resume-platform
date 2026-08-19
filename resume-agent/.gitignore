@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDE
+.idea/
+
+# Logs dos scripts de subida
+logs/
+
+# Saidas do Playwright MCP (snapshots e screenshots de sessao)
+.playwright-mcp/
+
+# Secrets
+.env
+
+# PDFs recebidos por upload agora ficam no bucket MinIO, não em disco.
