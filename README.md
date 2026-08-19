@@ -29,13 +29,14 @@ decisão sobre a vida profissional de alguém; regra no system prompt é pedido 
 > PDF, critério protegido, teto de custo), não o acesso. Rode em `localhost`.
 > Detalhes em [Aviso de segurança](#aviso-de-segurança).
 
-![O chat recomendando candidatos para uma vaga de Java](docs/demo-chat.png)
+![O chat recomendando candidatos para uma vaga de Java, no tema claro](docs/demo-chat.png)
 
-![O currículo em PDF aberto ao lado da conversa](docs/demo-pdf.png)
+![O currículo em PDF aberto ao lado da conversa, no tema escuro](docs/demo-pdf.png)
 
 <p align="center"><sub>Pergunta em português; o agente escolhe as ferramentas, busca na base
 vetorial e justifica cada indicação. Pedir o currículo devolve o PDF original, que abre ao lado da
-conversa — a tela só divide quando você pede.</sub></p>
+conversa — a tela só divide quando você pede. O cabeçalho traz o indicador de saúde da API
+(<code>online</code>/<code>offline</code>, via <code>/health</code>) e o botão de tema claro/escuro.</sub></p>
 
 ## O que este projeto demonstra
 
@@ -104,7 +105,7 @@ pgvector + HNSW                PDFs originais     traces (opcional)
 
 | Diretório | Stack | Porta | Responsabilidade |
 |-----------|-------|-------|------------------|
-| [`resume-webui/`](resume-webui/) | Vite 8, marked 18 (JS puro) | 5173 | Chat no browser; renderiza markdown e abre o PDF do currículo lado a lado |
+| [`resume-webui/`](resume-webui/) | Vite 8, marked 18 (JS puro) | 5173 | Chat no browser; renderiza markdown, abre o PDF do currículo lado a lado, indica saúde da API e alterna tema claro/escuro |
 | [`resume-agent/`](resume-agent/README.md) | Python 3.13, FastAPI, LangChain + LangGraph, SQLAlchemy, Alembic | 8000 | O agente, os guardrails, a ingestão de PDFs e a API REST |
 
 O `resume-agent` tem [README próprio](resume-agent/README.md), bem mais fundo: modelo de dados,
