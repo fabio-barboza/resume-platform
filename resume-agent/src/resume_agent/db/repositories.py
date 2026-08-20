@@ -11,7 +11,7 @@ ORM atrás.
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import Row, delete, exists, func, insert, select, update
+from sqlalchemy import Row, delete, distinct, exists, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -317,6 +317,38 @@ def list_chunks_by_candidate(
         .order_by(Document.id, Chunk.page, Chunk.chunk_index)
     )
     return _rows_to_dicts(session.execute(stmt))
+
+
+def count_candidates_by_terms(session: Session, terms: list[str]) -> dict[str, int]:
+    """Quantos candidatos distintos citam cada termo, um por currículo.
+
+    Contagem literal (substring, sem acento, sem caixa) via ILIKE, não busca
+    semântica: existe para dar número exato onde `find_in_resumes` só traria
+    os vizinhos mais próximos. Um único round-trip — cada termo vira uma
+    subquery escalar de `COUNT(DISTINCT documents.candidate_id)`, todas na
+    mesma SELECT, em vez de uma consulta por termo.
+    """
+    if not terms:
+        return {}
+
+    normalized_content = func.unaccent(func.lower(Chunk.content))
+    columns = []
+    for index, term in enumerate(terms):
+        # Escapa `%`, `_` e `\`: sem isso, o termo do usuário vira wildcard do LIKE.
+        escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        target = func.unaccent(func.lower(escaped))
+        condition = normalized_content.like("%" + target + "%", escape="\\")
+        columns.append(
+            select(func.count(distinct(Document.candidate_id)))
+            .select_from(Chunk)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(condition)
+            .scalar_subquery()
+            .label(f"term_{index}")
+        )
+
+    row = session.execute(select(*columns)).one()
+    return dict(zip(terms, row._mapping.values(), strict=True))
 
 
 def delete_chunks(session: Session, document_id: int) -> None:

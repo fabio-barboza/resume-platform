@@ -1,7 +1,7 @@
 import './style.css'
 import { marked } from 'marked'
 import { readSse } from './sse.js'
-import { renderStream, renderFinal, renderChart } from './markdown.js'
+import { renderStream, renderFinal, renderChart, refreshCharts, destroyCharts } from './markdown.js'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const CHAT_URL = `${API_URL}/chat`
@@ -215,6 +215,7 @@ function setTheme(theme) {
 
 themeToggle.addEventListener('click', () => {
     setTheme(currentTheme() === 'dark' ? 'light' : 'dark')
+    refreshCharts()
 })
 
 // ===== Estado vazio com sugestões =====
@@ -223,7 +224,7 @@ const SUGGESTIONS = [
     'Quantos currículos estão na base?',
     'Quem tem experiência com Python?',
     'Quais tecnologias aparecem com mais frequência?',
-    'Quem tem experiência com React?',
+    'Faça um gráfico de candidatos por tecnologia',
 ]
 
 function renderEmptyState() {
@@ -293,10 +294,20 @@ function buildPdfActions(content) {
     return actions
 }
 
+// Diagnóstico: resposta que parece ter spec de gráfico mas não virou nenhum.
+// Guarda o markdown CRU (com as crases) em `window.__lastChartMiss` — copiar
+// do DOM perde a fence e esconde qual formato o modelo emitiu.
+function debugChartMiss(content, charts) {
+    if (charts.length || !/"data"\s*:\s*\[/.test(content ?? '')) return
+    window.__lastChartMiss = content
+    console.warn('[chart] spec não reconhecido. Cru:', JSON.stringify(content))
+}
+
 // Markdown completo → HTML + gráficos montados nos placeholders. Único ponto
 // que chama `renderFinal`, então nenhum gráfico é desenhado com dado parcial.
 function mountFinalContent(textDiv, content) {
     const { html, charts } = renderFinal(content)
+    debugChartMiss(content, charts)
     textDiv.innerHTML = html
     for (const { id, spec } of charts) {
         const container = textDiv.querySelector(`[data-chart-id="${id}"]`)
@@ -328,17 +339,25 @@ function addStreamingMessage() {
     chat.scrollTop = chat.scrollHeight
 
     let buffer = ''
-    let renderScheduled = false
+    let rafId = null
 
     function scheduleRender() {
-        if (renderScheduled) return
-        renderScheduled = true
-        requestAnimationFrame(() => {
-            renderScheduled = false
+        if (rafId !== null) return
+        rafId = requestAnimationFrame(() => {
+            rafId = null
             const wasNearBottom = isNearBottom()
             textDiv.innerHTML = renderStream(buffer) + '<span class="stream-cursor"></span>'
             if (wasNearBottom) chat.scrollTop = chat.scrollHeight
         })
+    }
+
+    // O render do stream é assíncrono (rAF). Sem cancelar, um frame agendado
+    // pelo último token dispara DEPOIS do `finish` e sobrescreve o HTML final:
+    // gráfico some e o JSON do spec reaparece como texto cru.
+    function cancelPendingRender() {
+        if (rafId === null) return
+        cancelAnimationFrame(rafId)
+        rafId = null
     }
 
     return {
@@ -348,11 +367,20 @@ function addStreamingMessage() {
         setStatus(label) {
             statusDiv.textContent = label
         },
+        // Texto emitido antes de uma tool call é narração de passagem ("vou
+        // rodar em lotes menores") e não faz parte da mensagem final que vem
+        // no `done`. Descartar aqui evita o salto de conteúdo no fim do turno.
+        dropPreamble() {
+            if (!buffer) return
+            buffer = ''
+            scheduleRender()
+        },
         pushToken(text) {
             buffer += text
             scheduleRender()
         },
         finish(content, { interrupted = false } = {}) {
+            cancelPendingRender()
             const wasNearBottom = isNearBottom()
             div.classList.remove('streaming')
             statusDiv.remove()
@@ -371,6 +399,7 @@ function addStreamingMessage() {
             if (wasNearBottom) chat.scrollTop = chat.scrollHeight
         },
         fail(detail) {
+            cancelPendingRender()
             const wasNearBottom = isNearBottom()
             div.classList.remove('streaming')
             statusDiv.remove()
@@ -471,7 +500,10 @@ async function runStream(msg, text) {
             { signal: controller.signal }
         )) {
             receivedEvent = true
-            if (event === 'tool') msg.setStatus(TOOL_LABELS[data.name] ?? DEFAULT_TOOL_LABEL)
+            if (event === 'tool') {
+                if (data.status === 'start') msg.dropPreamble()
+                msg.setStatus(TOOL_LABELS[data.name] ?? DEFAULT_TOOL_LABEL)
+            }
             if (event === 'token') msg.pushToken(data.text)
             if (event === 'done') msg.finish(data.content)
             if (event === 'error') msg.fail(data.detail)
@@ -535,6 +567,7 @@ function startNewChat() {
     sessionId = generateSessionId()
     localStorage.setItem('chat-session-id', sessionId)
     closeViewer()
+    destroyCharts()
     renderEmptyState()
     resetInput()
     input.focus()

@@ -117,6 +117,50 @@ def find_candidate_by_name(name: str) -> str:
 
 
 @tool
+def count_candidates_by_skill(skills: list[str]) -> str:
+    """Conta quantos candidatos distintos citam cada termo no currículo.
+
+    Use antes de qualquer resposta com número por tecnologia, e sempre que for
+    montar gráfico ou comparar quantidade entre termos — é a única ferramenta
+    que mede em vez de estimar pelos trechos que `find_in_resumes` traz.
+
+    É busca LITERAL (substring, sem acento, sem caixa), não semântica: não
+    agrupa sinônimo nem variação ("Postgres" e "PostgreSQL" contam
+    separado) — cabe a você escolher os termos certos, inclusive variações,
+    se quiser somá-las depois. Não serve para julgar profundidade ou tempo de
+    experiência, só presença do termo no texto.
+
+    PASSE TODOS OS TERMOS NUMA CHAMADA SÓ: a lista existe para gastar UMA
+    chamada do orçamento de ferramentas por pergunta, não uma por tecnologia.
+    O limite é de 10 termos por chamada; o excedente é ignorado e vem listado
+    na resposta. Escolha os 10 que importam em vez de dividir em lotes.
+
+    Args:
+        skills: termos a contar, um por tecnologia/critério (ex.: ["Python",
+            "Java", "Cobol"]).
+    """
+    total = document_service.list_inventory()
+    counts = candidate_service.count_by_skill(skills)
+    if not counts:
+        return f"Total de candidatos na base: {len(total)}\nNenhum termo informado."
+
+    lines = [f"- {term}: {count}" for term, count in counts.items()]
+    body = f"Total de candidatos na base: {len(total)}\n" + "\n".join(lines)
+
+    # Sem esta nota o agente vê menos linhas do que pediu, conclui que a
+    # ferramenta truncou por conta própria e repete a busca em lotes.
+    ignored = [
+        t for t in candidate_service.normalize_skill_terms(skills) if t not in counts
+    ]
+    if ignored:
+        body += (
+            f"\nTermos ignorados (limite de "
+            f"{candidate_service.MAX_SKILL_TERMS} por chamada): " + ", ".join(ignored)
+        )
+    return body
+
+
+@tool
 def list_resumes() -> str:
     """Lista o inventário completo da base: todo candidato e seu currículo.
 
@@ -152,6 +196,10 @@ def list_resumes() -> str:
 
 # O que cada ferramenta faz está na docstring dela. Aqui fica o que a docstring
 # não alcança: comportamento entre ferramentas, entre turnos e ao responder.
+# As regras 13a-* travam o formato exato do link de PDF porque a webui
+# depende dele para virar botão; as regras 17-* travam o formato exato da
+# fence ```chart``` pelo mesmo motivo — é o `markdown.js` da webui que parseia
+# e desenha o gráfico.
 SYSTEM_PROMPT = f"""Você é um assistente de recrutamento que responde perguntas
     sobre uma base de currículos, consultando-a pelas ferramentas disponíveis.
 
@@ -178,6 +226,8 @@ SYSTEM_PROMPT = f"""Você é um assistente de recrutamento que responde pergunta
        "quantos") sem `list_resumes` ou `find_candidate_by_name` nesta rodada.
        O histórico da conversa nunca autoriza dizer que alguém não está na
        base.
+    6a. Número por tecnologia é `count_candidates_by_skill`, sempre — nunca
+        contagem de cabeça a partir dos trechos de `find_in_resumes`.
 
     ## Como responder
 
@@ -243,6 +293,49 @@ SYSTEM_PROMPT = f"""Você é um assistente de recrutamento que responde pergunta
         Exemplo ERRADO: qualquer resposta com seções tipo "Resumo",
         "Experiência Profissional", "Formação" etc.
 
+    ## Gráficos
+
+    17. Pergunta que **compara quantidade entre duas ou mais categorias**
+        (contagem por tecnologia, distribuição, ranking) cuja resposta tem
+        números vindos de ferramenta ⇒ acrescente ao final da resposta um
+        bloco ```chart``` com um objeto JSON neste formato exato. Pergunta
+        sobre **uma** tecnologia/pessoa só ("quem tem experiência com React?",
+        "quantos sabem Python?") não é comparação — não chama esta regra,
+        mesmo que a resposta tenha número. Ver 17c.
+        ```chart
+        {{
+          "type": "bar",
+          "title": "Candidatos por tecnologia",
+          "data": [
+            {{ "label": "Python", "value": 7 }},
+            {{ "label": "Java", "value": 4 }}
+          ]
+        }}
+        ```
+        O texto da resposta continua respondendo à pergunta por conta própria;
+        o gráfico complementa.
+    17a. PROIBIDO INVENTAR NÚMERO NO GRÁFICO. Só entra em `data` valor vindo de
+        `count_candidates_by_skill` ou de contagem exata de
+        `list_resumes`/`find_candidate_by_name`. Estimativa a partir de
+        trechos de `find_in_resumes` NÃO vira gráfico: essa tool devolve os
+        vizinhos mais próximos (k=4), não a base inteira — mesma lógica da
+        regra 6.
+    17b. No máximo um gráfico por resposta, no máximo 8 categorias em `data`;
+        `pie`/`doughnut` só até ~6 categorias. Nunca responda só com a fence —
+        o texto sempre responde à pergunta primeiro.
+    17c. REGRA DURA, sem exceção: se `data` teria só UM item, não gere
+        ```chart``` — responda só em texto. Vale tanto pra pergunta
+        qualitativa ("quem é bom em React") quanto pra pergunta quantitativa
+        sobre uma tecnologia/pessoa só ("quantos sabem React?"). Gráfico de
+        categoria única não compara nada; é ruído.
+    17d. `type` é sempre um de `bar` (comparação entre categorias), `line`
+        (sequência/evolução) ou `pie`/`doughnut` (proporção de um todo). Nada
+        fora dessa lista.
+    17e. O JSON do gráfico SÓ existe dentro da fence ```chart```. NUNCA escreva
+        o objeto solto no meio do texto e NUNCA use outra linguagem na fence
+        (nada de ```json```). Sem a abertura ```chart``` e o fechamento ```
+        na própria linha, a webui não desenha nada — o usuário vê o JSON cru.
+
     ## Manutenção da base
 
     14. Você é somente leitura, mas a aplicação cadastra, altera e remove por
@@ -273,7 +366,12 @@ SYSTEM_PROMPT = f"""Você é um assistente de recrutamento que responde pergunta
 
 agent = create_agent(
     model=Model.get_conversational_model(),
-    tools=[find_in_resumes, find_candidate_by_name, list_resumes],
+    tools=[
+        find_in_resumes,
+        find_candidate_by_name,
+        count_candidates_by_skill,
+        list_resumes,
+    ],
     system_prompt=SYSTEM_PROMPT,
     middleware=[
         # Pergunta barrada encerra o turno antes de qualquer busca. A regra 11

@@ -64,7 +64,7 @@ api/errors.py  → erro de domínio → status HTTP (único lugar que conhece c�
 services/      → regra de negócio, chamável fora do FastAPI
 db/repositories.py, db/vector_store.py → queries; db/errors.py não vaza ORM/driver
 guardrails/    → o que a base recusa receber e o que o agente recusa responder
-agent.py       → as 3 tools + SYSTEM_PROMPT + middlewares
+agent.py       → as 4 tools + SYSTEM_PROMPT + middlewares
 infra/model.py → factory de modelos (papéis MAIN_*/WORKER_*/EMBEDDING_*, tudo do .env)
 infra/observability.py → único liga/desliga do Langfuse
 ```
@@ -72,21 +72,24 @@ infra/observability.py → único liga/desliga do Langfuse
 Regra de negócio nova vai em `services/`, nunca no router. Endpoints são `def` síncrono de
 propósito (threadpool do FastAPI) — não converta para `async` sem necessidade real.
 
-### RAG agêntico com 3 tools
+### RAG agêntico com 4 tools
 
-O agente decide **se** e **como** busca; não há recuperação obrigatória. As três existem porque
+O agente decide **se** e **como** busca; não há recuperação obrigatória. As quatro existem porque
 nenhuma sozinha resolve:
 
 | Tool | Como | Por quê |
 |---|---|---|
 | `find_in_resumes` | vetorial, top-k cosseno (k=4) | experiência, tech, formação |
 | `find_candidate_by_name` | textual em SQL, sem acento, fora de ordem | embedding não recupera pessoa por nome |
+| `count_candidates_by_skill` | contagem literal em SQL (ILIKE, distinct por candidato) | número por tecnologia sem chute do modelo |
 | `list_resumes` | inventário completo, sem embedding | "quantos", "nenhum", contato |
 
 Só `list_resumes` e `find_candidate_by_name` autorizam o agente a afirmar que alguém **não** está
 na base. O `SYSTEM_PROMPT` em `agent.py` é numerado e as regras 13a-* travam o formato exato do
 link de PDF (`/candidates/<candidate_id>/resume`) — a webui depende desse formato para virar botão
-de visualização. Mexer no prompt exige rodar `pytest -m eval`.
+de visualização. As regras 17-* travam do mesmo jeito o formato da fence ` ```chart ` — o
+`markdown.js:extractCharts` da webui depende dele pra desenhar o gráfico. Mexer no prompt exige
+rodar `pytest -m eval`.
 
 ### Guardrails são código, não prompt
 

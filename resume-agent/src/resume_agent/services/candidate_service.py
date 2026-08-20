@@ -59,6 +59,38 @@ def search_by_name(term: str, limit: int = 10) -> list[dict[str, Any]]:
     return found
 
 
+# Teto de termos por chamada: cada termo é uma subquery escalar na mesma
+# SELECT, e a saída ainda precisa caber no contexto do agente.
+MAX_SKILL_TERMS = 10
+
+
+def normalize_skill_terms(skills: list[str]) -> list[str]:
+    """Tira espaço das pontas, descarta vazio e duplicado, preserva a ordem."""
+    seen: dict[str, None] = {}
+    for skill in skills:
+        stripped = skill.strip()
+        if stripped:
+            seen.setdefault(stripped, None)
+    return list(seen)
+
+
+def count_by_skill(skills: list[str]) -> dict[str, int]:
+    """Quantos candidatos distintos citam cada termo no currículo.
+
+    Normaliza antes de ir ao banco: remove espaço nas pontas, descarta vazio,
+    tira duplicado preservando a ordem, corta em `MAX_SKILL_TERMS` termos.
+    Quem chama compara as chaves devolvidas com o que pediu para saber o que
+    ficou de fora — corte silencioso faz o agente achar que a ferramenta está
+    quebrada e gastar chamadas repetindo a busca.
+    """
+    terms = normalize_skill_terms(skills)[:MAX_SKILL_TERMS]
+    if not terms:
+        return {}
+
+    with session() as sess:
+        return repo.count_candidates_by_terms(sess, terms)
+
+
 def replace_candidate(
     candidate_id: int,
     name: str | None,

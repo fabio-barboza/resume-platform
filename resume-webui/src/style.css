@@ -29,6 +29,9 @@
   --code-text: #a5f3fc;
   --link: #818cf8;
   --link-border: rgba(129, 140, 248, 0.4);
+  --chart-tick: #98a3bc;
+  --chart-grid: rgba(148, 163, 184, 0.13);
+  --chart-legend: #98a3bc;
   --shadow-pane: 0 24px 64px -16px rgba(2, 6, 23, 0.65);
   --shadow-pop: 0 8px 24px -8px rgba(2, 6, 23, 0.5);
 }
@@ -50,6 +53,9 @@
   --code-text: #a5f3fc;
   --link: #4f46e5;
   --link-border: rgba(79, 70, 229, 0.35);
+  --chart-tick: #4d5a75;
+  --chart-grid: rgba(15, 23, 42, 0.08);
+  --chart-legend: #4d5a75;
   --shadow-pane: 0 24px 48px -20px rgba(30, 41, 99, 0.22);
   --shadow-pop: 0 8px 24px -10px rgba(30, 41, 99, 0.25);
 }
@@ -693,8 +699,29 @@ body {
   color: #b91c1c;
 }
 
-/* Gráfico: implementação provisória de `renderChart` (markdown.js) — tabela
-   dos dados até a biblioteca de gráfico de verdade ser escolhida. */
+/* Gráfico de verdade (Chart.js), desenhado por `renderChart` (markdown.js). */
+.chart-card {
+  margin: 10px 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-3);
+  max-width: 560px;
+}
+
+.chart-box {
+  position: relative;
+  height: 280px;
+}
+
+.render-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+/* Fallback: spec inválido cai na tabela dos dados brutos, via `renderChartFallback`. */
 .chart-fallback {
   margin: 10px 0;
   padding: 10px 12px;

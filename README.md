@@ -79,7 +79,8 @@ resume-agent (FastAPI :8000)
     │    ├── LLM local OpenAI-compat  →  http://localhost:8200  (qwen3.6:35b)
     │    ├── embeddings               →  http://localhost:8892  (qwen3-embedding-0.6b)
     │    ├── guardrail before_agent   →  critério protegido encerra o turno
-    │    └── 3 tools: find_in_resumes / find_candidate_by_name / list_resumes
+    │    └── 4 tools: find_in_resumes / find_candidate_by_name / count_candidates_by_skill /
+    │        list_resumes
     │              │
     ├──────────────┼─────────────────────────────┐
     ▼              ▼                             ▼
@@ -251,11 +252,20 @@ interrompida.
 
 Fence é a única construção de markdown com delimitador de fechamento explícito, então o parser
 incremental sabe com certeza quando o dado acabou — nenhum ponto é plotado antes do JSON fechar.
-`renderChart` (`resume-webui/src/markdown.js`) é o único ponto de extensão para desenhar o gráfico
-de verdade; hoje mostra a tabela dos dados como placeholder, porque escolher biblioteca de gráfico
-é decisão separada da de streaming. **O `SYSTEM_PROMPT` ainda não emite blocos `chart`** — o
-caminho fica dormente até o prompt ganhar essa instrução, e passa a funcionar nesse dia sem tocar
-na webui de novo.
+`renderChart` (`resume-webui/src/markdown.js`) desenha o gráfico com Chart.js; se a spec não bater
+com o contrato, cai no fallback de tabela (`renderChartFallback`) em vez de quebrar a resposta.
+
+## Gráficos
+
+Pergunta quantitativa ou comparativa ("gráfico de candidatos por tecnologia", "distribuição por
+tecnologia") faz o agente acrescentar um bloco ` ```chart ` ao final da resposta. Os números vêm
+sempre de contagem em SQL (`count_candidates_by_skill`), nunca de estimativa do modelo sobre os
+trechos que `find_in_resumes` traz — mesma garantia de "não inventar" que já vale pra resposta em
+texto. Tipos suportados: `bar`, `line`, `pie`, `doughnut`.
+
+Fora da webui (REPL, `curl`, cliente que não conhece a fence), a resposta continua legível: o bloco
+` ```chart ` aparece como bloco de código comum, com o JSON dentro — degradação aceitável e
+intencional, não um erro.
 
 ## Testes e evals
 
