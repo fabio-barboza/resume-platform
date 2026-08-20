@@ -191,6 +191,7 @@ body {
 }
 
 .chat-pane {
+  --chat-col: 1120px;
   flex: 1.15;
   min-width: 0;
 }
@@ -308,9 +309,13 @@ body {
 .chat {
   flex: 1;
   overflow-y: auto;
-  padding: 22px 20px;
+  overflow-x: hidden;
+  /* Coluna de leitura de largura fixa, centralizada: as mensagens não mudam
+     de largura conforme o tamanho do texto. */
+  padding: 22px max(20px, calc((100% - var(--chat-col)) / 2));
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 16px;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
@@ -321,7 +326,8 @@ body {
 .chat::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
 
 .msg {
-  max-width: 82%;
+  max-width: 100%;
+  min-width: 0;
   padding: 12px 16px;
   border-radius: 16px;
   line-height: 1.6;
@@ -336,6 +342,8 @@ body {
 
 .msg.user {
   align-self: flex-end;
+  width: fit-content;
+  max-width: 85%;
   background: var(--user-grad);
   color: #fff;
   white-space: pre-wrap;
@@ -344,9 +352,10 @@ body {
 }
 
 .msg.assistant {
-  align-self: flex-start;
-  width: fit-content;
-  max-width: 92%;
+  /* Ocupa a coluna inteira: resposta curta e resposta longa têm a mesma caixa. */
+  align-self: stretch;
+  width: auto;
+  max-width: 100%;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-bottom-left-radius: 5px;
@@ -451,7 +460,8 @@ body {
 /* ===== Markdown ===== */
 
 .msg-text {
-  overflow-wrap: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .msg-text p { margin-bottom: 0.6em; }
@@ -523,8 +533,12 @@ body {
 }
 
 /* Tabelas do markdown */
+/* Tabela larga rola dentro da própria caixa, sem esticar a bolha. */
 .msg-text table {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 10px 0;
   font-size: 0.9em;
@@ -583,7 +597,8 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 14px 16px;
+  /* Mesma coluna do chat, para a caixa de texto ficar alinhada às mensagens. */
+  padding: 14px max(16px, calc((100% - var(--chat-col)) / 2));
   border-top: 1px solid var(--border);
   background: var(--surface-2);
 }
@@ -706,12 +721,14 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-3);
-  max-width: 560px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .chart-box {
   position: relative;
-  height: 280px;
+  width: 100%;
+  height: clamp(220px, 32vh, 320px);
 }
 
 .render-title {
@@ -856,7 +873,9 @@ body {
     height: 75dvh;
   }
 
-  .msg { max-width: 92%; }
+  .chat-pane { --chat-col: 100%; }
+  .chat { padding-inline: 14px; }
+  .msg.user { max-width: 92%; }
 
   .app-footer {
     flex-direction: column;

@@ -60,7 +60,7 @@ app.innerHTML = `
         <div class="brand">
             ${logo(36, 'lg-brand')}
             <div class="brand-text">
-                <span class="brand-name">Resume <em>Agent</em></span>
+                <span class="brand-name">Resume <em>Platform</em></span>
                 <span class="brand-sub">Triagem de currículos com IA</span>
             </div>
         </div>
