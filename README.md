@@ -35,8 +35,10 @@ decisão sobre a vida profissional de alguém; regra no system prompt é pedido 
 
 <p align="center"><sub>Pergunta em português; o agente escolhe as ferramentas, busca na base
 vetorial e justifica cada indicação. Pedir o currículo devolve o PDF original, que abre ao lado da
-conversa — a tela só divide quando você pede. O cabeçalho traz o indicador de saúde da API
-(<code>online</code>/<code>offline</code>, via <code>/health</code>) e o botão de tema claro/escuro.</sub></p>
+conversa — a tela só divide quando você pede. A conversa ocupa uma coluna de largura fixa, então a
+resposta não muda de caixa conforme o tamanho do texto. O cabeçalho traz o indicador de saúde da API
+(<code>online</code>/<code>offline</code>, via <code>/health</code>) e o botão de tema claro/escuro.
+Perguntas quantitativas viram <a href="#gráficos">gráfico</a>.</sub></p>
 
 ## O que este projeto demonstra
 
@@ -106,7 +108,7 @@ pgvector + HNSW                PDFs originais     traces (opcional)
 
 | Diretório | Stack | Porta | Responsabilidade |
 |-----------|-------|-------|------------------|
-| [`resume-webui/`](resume-webui/) | Vite 8, marked 18 (JS puro) | 5173 | Chat no browser; renderiza markdown, abre o PDF do currículo lado a lado, indica saúde da API e alterna tema claro/escuro |
+| [`resume-webui/`](resume-webui/) | Vite 8, marked 18 (JS puro) | 5173 | Chat no browser; renderiza markdown, desenha os gráficos (Chart.js), abre o PDF do currículo lado a lado, indica saúde da API e alterna tema claro/escuro |
 | [`resume-agent/`](resume-agent/README.md) | Python 3.13, FastAPI, LangChain + LangGraph, SQLAlchemy, Alembic | 8000 | O agente, os guardrails, a ingestão de PDFs e a API REST |
 
 O `resume-agent` tem [README próprio](resume-agent/README.md), bem mais fundo: modelo de dados,
@@ -256,6 +258,14 @@ incremental sabe com certeza quando o dado acabou — nenhum ponto é plotado an
 com o contrato, cai no fallback de tabela (`renderChartFallback`) em vez de quebrar a resposta.
 
 ## Gráficos
+
+![Contagem de candidatos por tecnologia respondida em tabela e desenhada como gráfico de barras, no tema escuro](docs/demo-chart-bar.png)
+
+![Distribuição por senioridade em gráfico de pizza, no tema claro, com o agente explicando por que a soma excede o total de candidatos](docs/demo-chart-pie.png)
+
+<p align="center"><sub>O gráfico acompanha a resposta em texto, nunca a substitui: a tabela com os
+números fica acima, e o agente diz de onde eles vieram — inclusive quando a contagem por termo não
+é uma partição exata da base.</sub></p>
 
 Pergunta quantitativa ou comparativa ("gráfico de candidatos por tecnologia", "distribuição por
 tecnologia") faz o agente acrescentar um bloco ` ```chart ` ao final da resposta. Os números vêm
