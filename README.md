@@ -209,6 +209,54 @@ leu** — mandar o revisor "abrir o PDF e conferir" não funciona quando o texto
 O detalhamento de cada um, com o raciocínio por trás das escolhas, está no
 [README do resume-agent](resume-agent/README.md#guardrails).
 
+## Streaming
+
+O chat responde em `text/event-stream` — o texto aparece token a token em vez de esperar a
+resposta inteira. `POST /chat` (síncrono) continua existindo para os evals, o REPL e como
+fallback; os dois endpoints compartilham o mesmo `chat_service`.
+
+```
+POST /chat/stream   { session_id, message }  →  text/event-stream
+```
+
+Cada frame é `event: <tipo>\ndata: <json>\n\n`. Tipos, sempre nesta ordem por turno:
+
+| Evento | Payload | Quando |
+|---|---|---|
+| `start` | `{ session_id }` | sempre o primeiro |
+| `tool` | `{ name, status }` | `status` é `start`/`end` de cada tool call do agente |
+| `token` | `{ text }` | delta de texto da resposta |
+| `done` | `{ content }` | fim normal — `content` é canônico, prevalece sobre a concatenação dos tokens |
+| `error` | `{ detail }` | falha — nunca acompanha `done` |
+
+A webui (`resume-webui/src/sse.js`) lê isso sobre `fetch` porque `EventSource` só faz GET e não
+manda body. Ela separa o texto recebido em um prefixo **estável** (já vira markdown) e uma cauda
+**pendente** (fence de código aberta, tabela em construção ou última linha sem quebra) — é o que
+garante que nenhum bloco (tabela, código, link de PDF) aparece formatado com dado pela metade.
+Detalhes em [`resume-webui/src/markdown.js`](resume-webui/src/markdown.js).
+
+**Fallback**: se `/chat/stream` não existir, o proxy não deixar passar SSE, ou o navegador não
+tiver `ReadableStream`, a webui cai para `POST /chat` — mas só quando nenhum evento chegou a ser
+recebido. Se o stream já tinha entregue texto e a conexão caiu no meio, ela **não** refaz a
+pergunta (duplicaria a chamada ao LLM); mostra a resposta parcial com um aviso de conexão
+interrompida.
+
+**Gráfico** trafega como bloco de código fenceado com linguagem `chart` e um JSON dentro:
+
+````markdown
+```chart
+{"type":"bar","title":"Candidatos por tecnologia","data":[{"label":"Python","value":7}]}
+```
+````
+
+Fence é a única construção de markdown com delimitador de fechamento explícito, então o parser
+incremental sabe com certeza quando o dado acabou — nenhum ponto é plotado antes do JSON fechar.
+`renderChart` (`resume-webui/src/markdown.js`) é o único ponto de extensão para desenhar o gráfico
+de verdade; hoje mostra a tabela dos dados como placeholder, porque escolher biblioteca de gráfico
+é decisão separada da de streaming. **O `SYSTEM_PROMPT` ainda não emite blocos `chart`** — o
+caminho fica dormente até o prompt ganhar essa instrução, e passa a funcionar nesse dia sem tocar
+na webui de novo.
+
 ## Testes e evals
 
 ```bash

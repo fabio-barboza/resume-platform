@@ -164,6 +164,9 @@ class _FakeClassifier:
     def with_structured_output(self, _schema):
         return self
 
+    def with_config(self, **_kwargs):
+        return self
+
     def invoke(self, prompt: str):
         self.calls.append(prompt)
         if isinstance(self.verdict, Exception):

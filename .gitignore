@@ -28,3 +28,6 @@ dist/
 
 # Config local do Claude Code
 .claude/
+
+# Planos de trabalho locais (nao versionados)
+plan/

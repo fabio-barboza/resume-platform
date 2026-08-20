@@ -97,7 +97,15 @@ def _last_question(state: AgentState) -> str | None:
 
 
 def _classify(question: str) -> CriterionTriage:
-    model: Runnable = Model.get_factual_model().with_structured_output(CriterionTriage)
+    # Tag "guardrail": sem ela, os tokens desta classificação entram no
+    # `stream_mode="messages"` do endpoint de streaming e aparecem na tela do
+    # usuário como se fossem resposta do agente. `chat_service.stream_answer`
+    # filtra por essa tag — não remova por parecer inútil aqui isolado.
+    model: Runnable = (
+        Model.get_factual_model()
+        .with_structured_output(CriterionTriage)
+        .with_config(tags=["guardrail"])
+    )
     result = model.invoke(_PROMPT.format(question=question))
     return result if isinstance(result, CriterionTriage) else CriterionTriage()
 

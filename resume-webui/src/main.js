@@ -1,8 +1,18 @@
 import './style.css'
 import { marked } from 'marked'
+import { readSse } from './sse.js'
+import { renderStream, renderFinal, renderChart } from './markdown.js'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const CHAT_URL = `${API_URL}/chat`
+const CHAT_STREAM_URL = `${API_URL}/chat/stream`
+
+const TOOL_LABELS = {
+    find_in_resumes: 'Buscando nos currículos…',
+    find_candidate_by_name: 'Procurando o candidato…',
+    list_resumes: 'Conferindo a base completa…',
+}
+const DEFAULT_TOOL_LABEL = 'Consultando a base…'
 
 // Casa `/candidates/<id ou email>/resume`, absoluto ou relativo, como o
 // agente devolve no markdown (ver `find_candidate_by_name` em agent.py).
@@ -252,49 +262,6 @@ function addUserMessage(text) {
     return div
 }
 
-function addLoadingMessage() {
-    const div = document.createElement('div')
-    div.className = 'msg assistant loading'
-    div.innerHTML = '<span class="typing" role="status" aria-label="Pensando"><i></i><i></i><i></i></span>'
-    chat.appendChild(div)
-    chat.scrollTop = chat.scrollHeight
-    return div
-}
-
-function addAssistantMessage(content) {
-    const div = document.createElement('div')
-    div.className = 'msg assistant'
-
-    const textDiv = document.createElement('div')
-    textDiv.className = 'msg-text'
-    textDiv.innerHTML = marked.parse(content ?? '')
-    div.appendChild(textDiv)
-
-    const links = [...(content ?? '').matchAll(RESUME_LINK_RE)]
-    if (links.length) {
-        const actions = document.createElement('div')
-        actions.className = 'msg-actions'
-        for (const [, base, identifier] of dedupeByIdentifier(links)) {
-            const url = `${base ?? API_URL}/candidates/${identifier}/resume`
-            const btn = document.createElement('button')
-            btn.className = 'view-pdf-btn'
-            btn.innerHTML = `
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
-                    <path d="M14 3v5h5"/>
-                </svg>
-                Ver currículo em PDF`
-            btn.addEventListener('click', () => showResume(url))
-            actions.appendChild(btn)
-        }
-        div.appendChild(actions)
-    }
-
-    chat.appendChild(div)
-    chat.scrollTop = chat.scrollHeight
-    return div
-}
-
 function dedupeByIdentifier(matches) {
     const seen = new Set()
     return matches.filter(m => {
@@ -302,6 +269,126 @@ function dedupeByIdentifier(matches) {
         seen.add(m[2])
         return true
     })
+}
+
+function buildPdfActions(content) {
+    const links = [...(content ?? '').matchAll(RESUME_LINK_RE)]
+    if (!links.length) return null
+
+    const actions = document.createElement('div')
+    actions.className = 'msg-actions'
+    for (const [, base, identifier] of dedupeByIdentifier(links)) {
+        const url = `${base ?? API_URL}/candidates/${identifier}/resume`
+        const btn = document.createElement('button')
+        btn.className = 'view-pdf-btn'
+        btn.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+                <path d="M14 3v5h5"/>
+            </svg>
+            Ver currículo em PDF`
+        btn.addEventListener('click', () => showResume(url))
+        actions.appendChild(btn)
+    }
+    return actions
+}
+
+// Markdown completo → HTML + gráficos montados nos placeholders. Único ponto
+// que chama `renderFinal`, então nenhum gráfico é desenhado com dado parcial.
+function mountFinalContent(textDiv, content) {
+    const { html, charts } = renderFinal(content)
+    textDiv.innerHTML = html
+    for (const { id, spec } of charts) {
+        const container = textDiv.querySelector(`[data-chart-id="${id}"]`)
+        if (container) renderChart(spec, container)
+    }
+}
+
+function isNearBottom() {
+    return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80
+}
+
+// Mensagem "viva": criada vazia, atualizada conforme os eventos do SSE chegam.
+function addStreamingMessage() {
+    hideEmptyState()
+
+    const div = document.createElement('div')
+    div.className = 'msg assistant streaming'
+
+    const statusDiv = document.createElement('div')
+    statusDiv.className = 'msg-status'
+    statusDiv.innerHTML = '<span class="typing" role="status" aria-label="Pensando"><i></i><i></i><i></i></span>'
+
+    const textDiv = document.createElement('div')
+    textDiv.className = 'msg-text'
+
+    div.appendChild(statusDiv)
+    div.appendChild(textDiv)
+    chat.appendChild(div)
+    chat.scrollTop = chat.scrollHeight
+
+    let buffer = ''
+    let renderScheduled = false
+
+    function scheduleRender() {
+        if (renderScheduled) return
+        renderScheduled = true
+        requestAnimationFrame(() => {
+            renderScheduled = false
+            const wasNearBottom = isNearBottom()
+            textDiv.innerHTML = renderStream(buffer) + '<span class="stream-cursor"></span>'
+            if (wasNearBottom) chat.scrollTop = chat.scrollHeight
+        })
+    }
+
+    return {
+        getText() {
+            return buffer
+        },
+        setStatus(label) {
+            statusDiv.textContent = label
+        },
+        pushToken(text) {
+            buffer += text
+            scheduleRender()
+        },
+        finish(content, { interrupted = false } = {}) {
+            const wasNearBottom = isNearBottom()
+            div.classList.remove('streaming')
+            statusDiv.remove()
+            mountFinalContent(textDiv, content)
+
+            const actions = buildPdfActions(content)
+            if (actions) div.appendChild(actions)
+
+            if (interrupted) {
+                const note = document.createElement('p')
+                note.className = 'msg-interrupted-note'
+                note.textContent = 'Resposta interrompida.'
+                div.appendChild(note)
+            }
+
+            if (wasNearBottom) chat.scrollTop = chat.scrollHeight
+        },
+        fail(detail) {
+            const wasNearBottom = isNearBottom()
+            div.classList.remove('streaming')
+            statusDiv.remove()
+
+            if (!buffer) {
+                div.classList.add('error')
+                textDiv.textContent = detail
+            } else {
+                mountFinalContent(textDiv, buffer)
+                const note = document.createElement('p')
+                note.className = 'msg-error-note'
+                note.textContent = detail
+                textDiv.appendChild(note)
+            }
+
+            if (wasNearBottom) chat.scrollTop = chat.scrollHeight
+        },
+    }
 }
 
 // ===== Visualizador de PDF =====
@@ -347,33 +434,100 @@ function resetInput() {
     input.style.height = '44px'
 }
 
-async function sendMessage() {
-    const text = input.value.trim()
-    if (!text) return
+const SEND_ICON = sendBtn.innerHTML
+const STOP_ICON = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="5" y="5" width="14" height="14" rx="2.5"/>
+    </svg>`
 
-    resetInput()
-    sendBtn.disabled = true
+let activeController = null
 
-    addUserMessage(text)
-    const loadingMsg = addLoadingMessage()
+function setStreamingUi(streaming) {
+    sendBtn.classList.toggle('stop-btn', streaming)
+    sendBtn.innerHTML = streaming ? STOP_ICON : SEND_ICON
+    sendBtn.title = streaming ? 'Parar' : 'Enviar'
+    sendBtn.setAttribute('aria-label', streaming ? 'Parar resposta' : 'Enviar mensagem')
+}
 
+// `/chat/stream` pode não existir (API antiga), o proxy pode não deixar
+// passar SSE, ou `ReadableStream` pode faltar. Uma vez confirmado que não dá
+// para streamar, não repete a tentativa nas próximas mensagens da sessão.
+let streamingSupported = true
+
+// Devolve `true` quando o turno foi resolvido (sucesso, erro ou cancelado) e
+// `false` quando deve cair para `runFallback` — só quando nenhum evento
+// chegou a ser recebido, para não refazer a pergunta e duplicar a resposta.
+async function runStream(msg, text) {
+    const controller = new AbortController()
+    activeController = controller
+    setStreamingUi(true)
+
+    let receivedEvent = false
+
+    try {
+        for await (const { event, data } of readSse(
+            CHAT_STREAM_URL,
+            { session_id: sessionId, message: text },
+            { signal: controller.signal }
+        )) {
+            receivedEvent = true
+            if (event === 'tool') msg.setStatus(TOOL_LABELS[data.name] ?? DEFAULT_TOOL_LABEL)
+            if (event === 'token') msg.pushToken(data.text)
+            if (event === 'done') msg.finish(data.content)
+            if (event === 'error') msg.fail(data.detail)
+        }
+        return true
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            msg.finish(msg.getText(), { interrupted: true })
+            return true
+        }
+
+        if (!receivedEvent) {
+            streamingSupported = false
+            return false
+        }
+
+        msg.fail('Conexão com o agente caiu. A resposta acima pode estar incompleta.')
+        return true
+    } finally {
+        activeController = null
+        setStreamingUi(false)
+    }
+}
+
+async function runFallback(msg, text) {
     try {
         const response = await fetch(CHAT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: sessionId, message: text }),
         })
-
         if (!response.ok) throw new Error(`status ${response.status}`)
         const data = await response.json()
-        loadingMsg.remove()
-        addAssistantMessage(data.content)
-    } catch (err) {
-        loadingMsg.className = 'msg assistant error'
-        loadingMsg.textContent = 'Erro ao conectar com o agente.'
+        msg.finish(data.content)
+    } catch {
+        msg.fail('Erro ao conectar com o agente.')
+    }
+}
+
+async function sendMessage() {
+    if (activeController) {
+        activeController.abort()
+        return
     }
 
-    sendBtn.disabled = false
+    const text = input.value.trim()
+    if (!text) return
+
+    resetInput()
+    addUserMessage(text)
+
+    const msg = addStreamingMessage()
+
+    const handled = streamingSupported ? await runStream(msg, text) : false
+    if (!handled) await runFallback(msg, text)
+
     input.focus()
 }
 

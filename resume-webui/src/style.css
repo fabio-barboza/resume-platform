@@ -526,7 +526,7 @@ body {
 
 .msg-text th {
   background: var(--code-bg);
-  color: var(--text);
+  color: var(--code-text);
   font-weight: 700;
   padding: 8px 12px;
   text-align: left;
@@ -634,6 +634,95 @@ body {
   cursor: wait;
   filter: none;
   transform: none;
+}
+
+.send-btn.stop-btn {
+  background: var(--danger);
+  box-shadow: 0 6px 18px -6px rgba(248, 113, 113, 0.55);
+}
+
+/* ===== Mensagem "viva" (streaming) ===== */
+
+.msg-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+
+.msg-status:not(:empty) ~ .msg-text:empty {
+  display: none;
+}
+
+/* Cauda pendente (fence/tabela/linha em construção): texto puro, mais apagado. */
+.pending {
+  opacity: 0.7;
+  white-space: pre-wrap;
+}
+
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  background: var(--text);
+  vertical-align: text-bottom;
+  animation: blink-cursor 0.9s step-end infinite;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.msg-interrupted-note {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.msg-error-note {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #fca5a5;
+}
+
+:root[data-theme='light'] .msg-error-note {
+  color: #b91c1c;
+}
+
+/* Gráfico: implementação provisória de `renderChart` (markdown.js) — tabela
+   dos dados até a biblioteca de gráfico de verdade ser escolhida. */
+.chart-fallback {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+.chart-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+.chart-fallback-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.chart-fallback-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chart-fallback-table tr:last-child td {
+  border-bottom: none;
 }
 
 /* ===== Visualizador de currículo ===== */

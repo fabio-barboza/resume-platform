@@ -123,8 +123,10 @@ PDF → pypdf → guardrails → chunks → embeddings → Postgres/pgvector
 
 ### Histórico de conversa
 
-Em memória do processo, por `session_id` gerado pelo cliente (`api/routers/chat.py`), perdido no
-restart. Sem isolamento entre sessões além do id.
+Em memória do processo, por `session_id` gerado pelo cliente, perdido no restart. Sem isolamento
+entre sessões além do id. `POST /chat` (síncrono, usado pelos evals e pelo REPL) e
+`POST /chat/stream` (SSE, usado pela webui) compartilham o mesmo `services/chat_service.py` — é lá
+que o histórico mora, não no router.
 
 ## Testes
 
