@@ -460,7 +460,7 @@ function closeViewer() {
 
 function resetInput() {
     input.value = ''
-    input.style.height = '44px'
+    input.style.height = '40px'
 }
 
 const SEND_ICON = sendBtn.innerHTML
@@ -585,7 +585,7 @@ input.addEventListener('keydown', e => {
 // Textarea cresce com o conteúdo (até 140px)
 input.addEventListener('input', () => {
     input.style.height = 'auto'
-    input.style.height = Math.min(input.scrollHeight, 140) + 'px'
+    input.style.height = Math.min(input.scrollHeight, 128) + 'px'
 })
 
 newChatBtn.addEventListener('click', startNewChat)

@@ -101,7 +101,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 24px;
+  padding: 10px 24px;
 }
 
 .brand {
@@ -176,7 +176,7 @@ body {
   min-height: 0;
   display: flex;
   gap: 16px;
-  padding: 4px 24px 16px;
+  padding: 2px 24px 10px;
 }
 
 .chat-pane, .viewer-pane {
@@ -598,7 +598,7 @@ body {
   align-items: flex-end;
   gap: 10px;
   /* Mesma coluna do chat, para a caixa de texto ficar alinhada às mensagens. */
-  padding: 14px max(16px, calc((100% - var(--chat-col)) / 2));
+  padding: 10px max(16px, calc((100% - var(--chat-col)) / 2));
   border-top: 1px solid var(--border);
   background: var(--surface-2);
 }
@@ -607,11 +607,11 @@ body {
   flex: 1;
   min-width: 0;
   resize: none;
-  height: 44px;
-  max-height: 140px;
+  height: 40px;
+  max-height: 128px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 13px;
+  padding: 9px 14px;
   background: var(--surface-solid);
   color: var(--text);
   font-family: inherit;
@@ -629,8 +629,8 @@ body {
 }
 
 .send-btn {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -814,9 +814,9 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px 16px;
-  padding: 10px 28px 16px;
-  font-size: 12.5px;
+  gap: 6px 16px;
+  padding: 6px 28px 10px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -835,8 +835,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 10px;
-  border-radius: 10px;
+  padding: 4px 9px;
+  border-radius: 9px;
   border: 1px solid transparent;
   color: var(--text-faint);
   font-weight: 500;
@@ -854,12 +854,12 @@ body {
 /* ===== Responsivo ===== */
 
 @media (max-width: 920px) {
-  .topbar { padding: 12px 16px; }
+  .topbar { padding: 9px 16px; }
   .brand-sub { display: none; }
 
   .app {
     flex-direction: column;
-    padding: 4px 16px 12px;
+    padding: 2px 16px 8px;
     overflow-y: auto;
   }
 
@@ -880,6 +880,6 @@ body {
   .app-footer {
     flex-direction: column;
     text-align: center;
-    padding: 8px 16px 18px;
+    padding: 6px 16px 12px;
   }
 }
