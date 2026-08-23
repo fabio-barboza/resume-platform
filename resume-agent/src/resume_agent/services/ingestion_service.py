@@ -68,6 +68,15 @@ def _decide_status(extracted: CandidateExtraction) -> str:
     return STATUS_INGESTED if extracted.email else STATUS_PENDING_REVIEW
 
 
+def _require_identity(extracted: CandidateExtraction, filename: str) -> None:
+    """Sem nome, email e telefone, não há como identificar o candidato."""
+    if not (extracted.name or extracted.email or extracted.phone):
+        raise InvalidDocumentError(
+            f"O arquivo '{filename}' foi recusado: não foi possível extrair "
+            "nome, email ou telefone do currículo."
+        )
+
+
 def _prepare(content: bytes, filename: str) -> tuple[list[str], list[Chunk]]:
     """Lê o PDF, valida e fatia.
 
@@ -174,6 +183,7 @@ def ingest_resume(filename: str, content: bytes) -> IngestionResult:
 
     pages, chunks = _prepare(content, filename)
     extracted = extract_candidate(first_pages_text(pages, EXTRACTION_PAGES))
+    _require_identity(extracted, filename)
     embeddings = _embed(chunks)
     status = _decide_status(extracted)
 
@@ -244,6 +254,7 @@ def replace_resume(document_id: int, filename: str, content: bytes) -> Ingestion
 
     pages, chunks = _prepare(content, filename)
     extracted = extract_candidate(first_pages_text(pages, EXTRACTION_PAGES))
+    _require_identity(extracted, filename)
     embeddings = _embed(chunks)
     status = _decide_status(extracted)
     previous_candidate_id = current["candidate_id"]

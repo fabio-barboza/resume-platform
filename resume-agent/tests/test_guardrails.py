@@ -23,6 +23,7 @@ from resume_agent.guardrails.discrimination import (
 from resume_agent.guardrails.injection import find_injection
 from resume_agent.services import ingestion_service
 from resume_agent.services.errors import InvalidDocumentError
+from resume_agent.services.extraction_service import CandidateExtraction
 
 # --- Guardrail 1: injeção de prompt no currículo ------------------------------
 
@@ -149,6 +150,29 @@ def test_resume_exactly_at_page_limit_passes(monkeypatch):
 
     assert len(pages) == 3
     assert chunks
+
+
+# --- Guardrail 5: sem nome, email nem telefone, não ingere ---------------------
+
+
+def test_extraction_without_any_identity_field_is_refused():
+    extracted = CandidateExtraction(name=None, email=None, phone=None)
+    with pytest.raises(InvalidDocumentError) as error:
+        ingestion_service._require_identity(extracted, "cv.pdf")
+
+    assert "não foi possível extrair" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "extracted",
+    [
+        CandidateExtraction(name="Joao da Silva", email=None, phone=None),
+        CandidateExtraction(name=None, email="joao@example.com", phone=None),
+        CandidateExtraction(name=None, email=None, phone="11999999999"),
+    ],
+)
+def test_extraction_with_any_identity_field_passes(extracted):
+    ingestion_service._require_identity(extracted, "cv.pdf")
 
 
 # --- Guardrail 2: critério protegido na pergunta do recrutador -----------------
