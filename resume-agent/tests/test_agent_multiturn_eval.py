@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 import pytest
 
 from resume_agent.agent import agent
+from resume_agent.guardrails.grounding import _fold, person_mentions
+from resume_agent.services import document_service
 
 pytestmark = pytest.mark.eval
 
@@ -99,7 +101,6 @@ def conversation(populated_database) -> Conversation:
 
 
 class TestSearchReuse:
-
     def test_criterion_change_within_same_domain(self, conversation):
         """Mesmo assunto (tecnologia), critério diferente do recuperado."""
         first = conversation.ask("Quem tem experiência com backend em Go?")
@@ -171,6 +172,19 @@ class TestSearchReuse:
                 for term in ("devops", "sre", "confiabilidade", "infraestrutura")
             ), second.diagnosis("esperava o perfil real de Bruno Carvalho")
 
+    def test_recommendation_must_search_first(self, conversation):
+        """Pergunta de recomendação sem nenhuma tool call é invenção pura.
+
+        O caso real: o agente respondeu "realizei uma busca semântica" e listou
+        três candidatos com zero tool calls no turno. Nenhum dos três existia.
+        """
+        turn = conversation.ask(
+            "Qual o melhor candidato para uma vaga de Engenheiro de IA aplicada?"
+        )
+        assert turn.queried_database, turn.diagnosis(
+            "recomendação exige consultar a base, não opinar de cabeça"
+        )
+
     def test_claim_about_the_whole_set(self, conversation):
         """Regra 3: 'existe algum' exige consultar a base, não o histórico."""
         conversation.ask("Quem sabe Python?")
@@ -180,4 +194,50 @@ class TestSearchReuse:
         )
         assert second.queried_database, second.diagnosis(
             "afirmação sobre o conjunto não pode sair do histórico da conversa"
+        )
+
+
+def _real_name_tokens() -> list[set[str]]:
+    """Um conjunto de palavras por nome de candidato que existe na base."""
+    return [
+        {_fold(word) for word in record["name"].split()}
+        for record in document_service.list_inventory()
+        if record.get("name")
+    ]
+
+
+def invented_names(answer: str) -> list[str]:
+    """Nomes citados na resposta que não batem com nenhum candidato da base.
+
+    O trecho extraído pode arrastar a palavra anterior ("Encontrei Amanda
+    Rocha"), então bastam duas palavras em comum com o mesmo cadastro para o
+    nome contar como real — sobrenome solto coincidindo não basta.
+    """
+    real = _real_name_tokens()
+    invented = []
+    for mention in person_mentions(answer):
+        words = {_fold(word) for word in mention.split()}
+        if not any(len(words & name) >= 2 for name in real):
+            invented.append(mention)
+    return invented
+
+
+class TestNoInventedCandidates:
+    """Nome citado tem que existir na base — o erro mais caro do RAG."""
+
+    def test_recommendation_cites_only_real_candidates(self, conversation):
+        turn = conversation.ask(
+            "Qual o melhor candidato para uma vaga de Engenheiro de IA aplicada?"
+        )
+        assert not invented_names(turn.answer), turn.diagnosis(
+            f"nomes que não existem na base: {invented_names(turn.answer)}"
+        )
+
+    def test_follow_up_cites_only_real_candidates(self, conversation):
+        """O segundo turno é onde a invenção do primeiro vira racionalização."""
+        conversation.ask("Quem tem experiência com dados e machine learning?")
+
+        second = conversation.ask("E quem mais poderia servir para essa vaga?")
+        assert not invented_names(second.answer), second.diagnosis(
+            f"nomes que não existem na base: {invented_names(second.answer)}"
         )

@@ -18,6 +18,7 @@ from langchain_core.tools import tool
 from resume_agent.config import api_url, swagger_url
 from resume_agent.db.vector_store import similarity_search
 from resume_agent.guardrails.discrimination import protected_criterion_guardrail
+from resume_agent.guardrails.grounding import grounding_guardrail
 from resume_agent.infra import Model, observability
 from resume_agent.services import candidate_service, document_service
 
@@ -365,7 +366,11 @@ SYSTEM_PROMPT = f"""Você é um assistente de recrutamento que responde pergunta
     """
 
 agent = create_agent(
-    model=Model.get_conversational_model(),
+    # Determinístico de propósito: recomendar candidato é tarefa factual, não
+    # criativa. Com temperatura alta o modelo prefere opinar de cabeça a chamar
+    # a ferramenta — foi assim que ele inventou três candidatos que não existem
+    # na base em vez de buscar.
+    model=Model.get_factual_model(),
     tools=[
         find_in_resumes,
         find_candidate_by_name,
@@ -383,6 +388,10 @@ agent = create_agent(
         ToolCallLimitMiddleware(
             run_limit=MAX_TOOL_CALLS_PER_QUESTION, exit_behavior="continue"
         ),
+        # Última barreira, sobre a resposta pronta: fala da base sem ter
+        # consultado a base não sai daqui. As regras 6, 9, 10 e 17a do prompt
+        # dizem a mesma coisa em texto; esta é a versão determinística delas.
+        grounding_guardrail,
     ],
 ).with_config(
     # Sem tracing, `callbacks()` devolve lista vazia e o agente roda igual.
