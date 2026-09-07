@@ -414,8 +414,9 @@ Roteiro de demo e teste de fumaça, com o navegador em <http://localhost:5173> e
 >   **o PDF inteiro** daquela pessoa;
 > - Postgres e MinIO sobem com **credenciais padrão**, versionadas no `.env.example`, com as portas
 >   publicadas no host;
-> - o histórico da conversa fica **em memória do processo**, sem isolamento entre sessões além do
->   `session_id` que o próprio cliente gera;
+> - o histórico da conversa é **persistido no Postgres** pelo checkpointer do LangGraph, sem
+>   isolamento entre sessões além do `session_id` que o próprio cliente gera — quem adivinhar um
+>   `session_id` lê a conversa alheia, e agora ela não morre mais no restart;
 > - os traces do Langfuse guardam **prompt e resposta em claro**, incluindo trechos de currículo.
 >
 > Currículo é dado pessoal (LGPD). Os guardrails deste projeto tratam de **conteúdo** — o que a base

@@ -1,36 +1,90 @@
 """Testes determinísticos de `POST /chat/stream` e `POST /chat`.
 
-Sem marcador `eval`: nenhum teste chama LLM de verdade. O agente usado pelo
-`chat_service` é substituído por um fake cujo `.stream()`/`.invoke()` devolve
-uma sequência fixa, via monkeypatch de `resume_agent.agent.agent` — é esse
-atributo que o import tardio em `chat_service` resolve a cada chamada.
+Sem marcador `eval`: nenhum teste chama LLM de verdade nem toca o Postgres. O
+agente usado pelo `chat_service` é substituído por um fake, via monkeypatch de
+`resume_agent.agent.agent` — é esse atributo que o import tardio em
+`chat_service` resolve a cada chamada.
+
+O fake também finge ser o checkpointer: guarda as mensagens por `thread_id` e
+implementa `get_state`/`update_state`. Sem isso não dá para testar a
+compensação de turno interrompido, que é justamente o que evita pergunta órfã
+no histórico persistido.
 """
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    RemoveMessage,
+    ToolMessage,
+)
 
 from resume_agent.api.main import app
 from resume_agent.services import chat_service
 
 
 class _FakeAgent:
-    """Agente fake: `.stream()` reproduz uma sequência fixa de `(mode, payload)`."""
+    """Agente fake com checkpointer de mentira.
+
+    `.stream()` reproduz uma sequência fixa de `(mode, payload)`. O estado por
+    `thread_id` é atualizado a partir do último `values` visto, e a mensagem do
+    usuário entra assim que o turno começa — igual ao checkpointer de verdade,
+    que é o motivo de a pergunta órfã existir.
+    """
 
     def __init__(self, events=None, invoke_result=None, raise_after=None):
         self._events = events or []
         self._invoke_result = invoke_result
         self._raise_after = raise_after
+        self._threads: dict[str, list] = {}
 
-    def stream(self, _input, stream_mode):
+    @staticmethod
+    def _thread_id(config):
+        return config["configurable"]["thread_id"]
+
+    def get_state(self, config):
+        messages = self._threads.get(self._thread_id(config), [])
+        return SimpleNamespace(values={"messages": list(messages)})
+
+    def update_state(self, config, values):
+        removed = {
+            m.id for m in values.get("messages", []) if isinstance(m, RemoveMessage)
+        }
+        thread = self._thread_id(config)
+        self._threads[thread] = [
+            m for m in self._threads.get(thread, []) if m.id not in removed
+        ]
+
+    def _record_user_message(self, config, payload):
+        """Persiste a pergunta antes de existir resposta, como o checkpointer."""
+        thread = self._thread_id(config)
+        for message in payload.get("messages", []):
+            self._threads.setdefault(thread, []).append(
+                AIMessage(
+                    content=message["content"], id=f"user-{len(self._threads[thread])}"
+                )
+            )
+
+    def stream(self, payload, config, stream_mode):
+        self._record_user_message(config, payload)
+        thread = self._thread_id(config)
         for i, event in enumerate(self._events):
             if self._raise_after is not None and i == self._raise_after:
                 raise RuntimeError("falha simulada do provedor")
+            mode, data = event
+            if mode == "values":
+                for message in data["messages"]:
+                    if message.id is None:
+                        message.id = f"ai-{thread}-{len(self._threads[thread])}"
+                    self._threads[thread].append(message)
             yield event
 
-    def invoke(self, _input):
+    def invoke(self, payload, config):
+        self._record_user_message(config, payload)
         return self._invoke_result
 
 
@@ -56,13 +110,6 @@ def _parse_sse(body: str) -> list[tuple[str, dict]]:
         data = json.loads(data_raw)
         parsed.append((event, data))
     return parsed
-
-
-@pytest.fixture(autouse=True)
-def _clear_histories():
-    chat_service._histories.clear()
-    yield
-    chat_service._histories.clear()
 
 
 @pytest.fixture
@@ -177,6 +224,13 @@ class TestChatStreamShape:
 
 
 class TestHistorico:
+    """Histórico agora mora no checkpointer; os testes o leem por `get_state`."""
+
+    @staticmethod
+    def _messages(agent, thread_id):
+        config = {"configurable": {"thread_id": thread_id}}
+        return agent.get_state(config).values["messages"]
+
     def test_historico_apos_sucesso(self, monkeypatch):
         first_events = [
             _token_chunk("primeira resposta"),
@@ -190,15 +244,20 @@ class TestHistorico:
 
         list(chat_service.stream_answer("hist-1", "primeira pergunta"))
 
-        history_after = chat_service._histories["hist-1"]
-        assert history_after[-1].content == "primeira resposta"
+        assert self._messages(fake, "hist-1")[-1].content == "primeira resposta"
 
-        # próximo turno da mesma sessão parte do histórico anterior
-        second_events = [_final_values("segunda resposta")]
-        fake._events = second_events
+        # próximo turno da mesma sessão acumula no mesmo `thread_id`
+        fake._events = [_final_values("segunda resposta")]
         list(chat_service.stream_answer("hist-1", "segunda pergunta"))
 
-        assert chat_service._histories["hist-1"][-1].content == "segunda resposta"
+        messages = self._messages(fake, "hist-1")
+        assert messages[-1].content == "segunda resposta"
+        assert [m.content for m in messages] == [
+            "primeira pergunta",
+            "primeira resposta",
+            "segunda pergunta",
+            "segunda resposta",
+        ]
 
     def test_historico_preservado_apos_excecao(self, monkeypatch):
         import resume_agent.agent as agent_module
@@ -207,20 +266,35 @@ class TestHistorico:
         fake = _FakeAgent(events=[_final_values("resposta ok")])
         monkeypatch.setattr(agent_module, "agent", fake)
         list(chat_service.stream_answer("hist-2", "pergunta 1"))
-        history_before = list(chat_service._histories["hist-2"])
+        history_before = list(self._messages(fake, "hist-2"))
 
-        # segundo turno levanta exceção no meio do stream
-        failing = _FakeAgent(
-            events=[_token_chunk("começando..."), _final_values("nunca chega")],
-            raise_after=1,
-        )
-        monkeypatch.setattr(agent_module, "agent", failing)
+        # segundo turno levanta exceção no meio do stream, depois de o
+        # checkpointer já ter gravado a pergunta
+        fake._events = [_token_chunk("começando..."), _final_values("nunca chega")]
+        fake._raise_after = 1
 
         results = list(chat_service.stream_answer("hist-2", "pergunta 2"))
         assert results[-1][0] == "error"
         assert not any(event == "done" for event, _ in results)
 
-        assert chat_service._histories["hist-2"] == history_before
+        # a pergunta órfã foi removida: o turno seguinte não parte dela
+        assert self._messages(fake, "hist-2") == history_before
+
+    def test_pergunta_orfa_removida_em_desconexao(self, monkeypatch):
+        """Cliente fecha a aba no meio do stream: nada do turno fica gravado."""
+        import resume_agent.agent as agent_module
+
+        fake = _FakeAgent(
+            events=[_token_chunk("come"), _token_chunk("çando"), _final_values("fim")]
+        )
+        monkeypatch.setattr(agent_module, "agent", fake)
+
+        stream = chat_service.stream_answer("hist-3", "pergunta abandonada")
+        next(stream)  # start
+        next(stream)  # primeiro token
+        stream.close()  # GeneratorExit
+
+        assert self._messages(fake, "hist-3") == []
 
 
 class TestChatSemStream:

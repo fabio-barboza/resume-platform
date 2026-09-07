@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 
 from resume_agent.agent import agent
@@ -7,7 +9,11 @@ pytestmark = pytest.mark.eval
 
 
 def _ask(question: str) -> str:
-    result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+    # Thread nova por pergunta: o agente tem checkpointer, então sem
+    # `thread_id` ele nem roda, e reaproveitar um faria uma pergunta contaminar
+    # a próxima.
+    config = {"configurable": {"thread_id": f"eval-{uuid4()}"}}
+    result = agent.invoke({"messages": [{"role": "user", "content": question}]}, config)
     return result["messages"][-1].content
 
 
@@ -28,7 +34,6 @@ def _check(
 
 
 class TestAgentRagEvals:
-
     def test_search_by_name(self, populated_database):
         answer = _ask("O que você sabe sobre o Rafael Mendes?")
         assert not _check(answer, must_include=["Rafael Mendes"])

@@ -18,7 +18,7 @@ from langchain_core.tools import tool
 from resume_agent.config import api_url, swagger_url
 from resume_agent.db.vector_store import similarity_search
 from resume_agent.guardrails.discrimination import protected_criterion_guardrail
-from resume_agent.infra import Model, observability
+from resume_agent.infra import Model, get_checkpointer, observability
 from resume_agent.services import candidate_service, document_service
 
 load_dotenv()
@@ -384,6 +384,11 @@ agent = create_agent(
             run_limit=MAX_TOOL_CALLS_PER_QUESTION, exit_behavior="continue"
         ),
     ],
+    # Histórico de conversa no Postgres, endereçado pelo `thread_id` que o
+    # `chat_service` preenche com o `session_id`. Sem isso o estado fica na
+    # memória do processo e a conversa se perde no segundo turno assim que
+    # existe mais de uma réplica.
+    checkpointer=get_checkpointer(),
 ).with_config(
     # Sem tracing, `callbacks()` devolve lista vazia e o agente roda igual.
     RunnableConfig(

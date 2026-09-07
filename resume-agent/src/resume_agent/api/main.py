@@ -19,6 +19,7 @@ from resume_agent.api.errors import register_exception_handlers
 from resume_agent.api.routers import candidates, chat, resumes
 from resume_agent.config import API_HOST, API_PORT
 from resume_agent.db.engine import dispose_engine, get_engine, session
+from resume_agent.infra import close_checkpointer
 
 DESCRIPTION = """
 Manutenção da base de currículos consultada pelo agente RAG.
@@ -37,6 +38,9 @@ async def lifespan(_: FastAPI):
     get_engine()
     yield
     dispose_engine()
+    # O checkpointer tem pool próprio (psycopg3, não SQLAlchemy): sem fechar,
+    # o pod deixa conexão pendurada no Postgres a cada rollout.
+    close_checkpointer()
 
 
 app = FastAPI(
@@ -81,12 +85,14 @@ def _mark_binary_fields(node: Any) -> Any:
 
 def custom_openapi() -> dict[str, Any]:
     if not app.openapi_schema:
-        app.openapi_schema = _mark_binary_fields(get_openapi(
-            title=app.title,
-            version=app.version,
-            description=app.description,
-            routes=app.routes,
-        ))
+        app.openapi_schema = _mark_binary_fields(
+            get_openapi(
+                title=app.title,
+                version=app.version,
+                description=app.description,
+                routes=app.routes,
+            )
+        )
     return app.openapi_schema
 
 

@@ -1,15 +1,18 @@
 """Histórico de conversa e tradução do stream do agente em eventos SSE.
 
-O histórico é efêmero por processo: vive em memória por `session_id` e é
-perdido no restart, mesmo comportamento do REPL em `__main__.py`.
+O histórico é persistido pelo checkpointer do LangGraph no Postgres
+(`infra/checkpointer.py`), com `thread_id` igual ao `session_id` do cliente.
+Não vive mais na memória do processo: sobrevive ao restart e é compartilhado
+entre réplicas, que é o que permite mais de um pod atender a mesma conversa.
+
+Como o estado está no banco, cada turno envia só a mensagem nova — o LangGraph
+carrega o resto do checkpoint.
 """
 
 import logging
 from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
-
-_histories: dict[str, list[dict]] = {}
 
 # Nome do nó do modelo no grafo montado por `create_agent` (langchain 1.3.x).
 # Confirmado em `agents/factory.py`: `graph.add_node("model", ...)`. Se a
@@ -18,14 +21,64 @@ _histories: dict[str, list[dict]] = {}
 _MODEL_NODE = "model"
 
 
+def _config(session_id: str) -> dict:
+    """Endereço da conversa para o checkpointer."""
+    return {"configurable": {"thread_id": session_id}}
+
+
+def _message_ids(agent, config: dict) -> set[str]:
+    """Ids das mensagens já persistidas na thread, antes do turno começar."""
+    state = agent.get_state(config)
+    messages = (state.values or {}).get("messages", [])
+    return {m.id for m in messages if getattr(m, "id", None)}
+
+
+def _rollback_turn(agent, config: dict, previous_ids: set[str]) -> None:
+    """Apaga da thread tudo que este turno gravou.
+
+    O checkpointer grava a pergunta do usuário assim que o primeiro passo do
+    grafo termina — antes, portanto, de existir resposta. Se o cliente
+    desconectar ou o modelo cair no meio, a thread fica com pergunta órfã e o
+    turno seguinte alucina em cima dela. Aqui removemos por id o que apareceu
+    depois do início do turno, o que devolve a thread ao estado anterior.
+
+    Falha ao reverter é logada e engolida: quem chama já está tratando um erro,
+    e mascarar o erro original por causa da compensação seria pior.
+    """
+    from langchain_core.messages import RemoveMessage
+
+    try:
+        state = agent.get_state(config)
+        added = [
+            m
+            for m in (state.values or {}).get("messages", [])
+            if getattr(m, "id", None) and m.id not in previous_ids
+        ]
+        if added:
+            agent.update_state(
+                config, {"messages": [RemoveMessage(id=m.id) for m in added]}
+            )
+    except Exception:
+        logger.exception(
+            "Falha ao reverter o turno interrompido (thread_id=%s). O histórico "
+            "pode ter ficado com uma pergunta sem resposta.",
+            config["configurable"]["thread_id"],
+        )
+
+
 def ask(session_id: str, message: str) -> str:
-    """Um turno sem streaming: invoke + grava histórico. Usado por `POST /chat`."""
+    """Um turno sem streaming: invoke + checkpoint. Usado por `POST /chat`."""
     from resume_agent.agent import agent
 
-    history = _histories.setdefault(session_id, [])
-    history.append({"role": "user", "content": message})
-    result = agent.invoke({"messages": history})
-    _histories[session_id] = result["messages"]
+    config = _config(session_id)
+    previous_ids = _message_ids(agent, config)
+    try:
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": message}]}, config
+        )
+    except Exception:
+        _rollback_turn(agent, config, previous_ids)
+        raise
     return result["messages"][-1].content
 
 
@@ -42,11 +95,11 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
 
     yield "start", {"session_id": session_id}
 
-    history = _histories.setdefault(session_id, [])
-    # Guardado antes do turno: se o cliente desconectar (`GeneratorExit`) ou o
-    # modelo cair no meio, restauramos este valor em vez de deixar o histórico
-    # com uma pergunta sem resposta — isso faz o próximo turno alucinar.
-    previous_history = list(history)
+    config = _config(session_id)
+    # Fotografado antes do turno: se o cliente desconectar (`GeneratorExit`) ou
+    # o modelo cair no meio, é por esta lista que `_rollback_turn` sabe o que
+    # apagar do checkpoint.
+    previous_ids = _message_ids(agent, config)
 
     user_message = {"role": "user", "content": message}
     streamed: list[str] = []
@@ -55,7 +108,8 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
 
     try:
         for mode, payload in agent.stream(
-            {"messages": history + [user_message]},
+            {"messages": [user_message]},
+            config,
             stream_mode=["messages", "values"],
         ):
             if mode == "values":
@@ -107,18 +161,18 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
             streamed.append(text)
             yield "token", {"text": text}
     except GeneratorExit:
-        _histories[session_id] = previous_history
+        _rollback_turn(agent, config, previous_ids)
         raise
     except Exception:
         logger.exception(
             "Falha ao gerar a resposta em streaming (session_id=%s).", session_id
         )
-        _histories[session_id] = previous_history
+        _rollback_turn(agent, config, previous_ids)
         yield "error", {"detail": "Falha ao gerar a resposta. Tente novamente."}
         return
 
     if last_values is None:
-        _histories[session_id] = previous_history
+        _rollback_turn(agent, config, previous_ids)
         yield "error", {"detail": "Falha ao gerar a resposta. Tente novamente."}
         return
 
@@ -128,5 +182,4 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
         # provedor sem streaming e resposta inteira vinda num chunk só.
         yield "token", {"text": final}
 
-    _histories[session_id] = last_values["messages"]
     yield "done", {"content": final}

@@ -126,10 +126,25 @@ PDF → pypdf → guardrails → chunks → embeddings → Postgres/pgvector
 
 ### Histórico de conversa
 
-Em memória do processo, por `session_id` gerado pelo cliente, perdido no restart. Sem isolamento
-entre sessões além do id. `POST /chat` (síncrono, usado pelos evals e pelo REPL) e
-`POST /chat/stream` (SSE, usado pela webui) compartilham o mesmo `services/chat_service.py` — é lá
-que o histórico mora, não no router.
+No Postgres, pelo checkpointer do LangGraph (`infra/checkpointer.py`), com `thread_id` igual ao
+`session_id` gerado pelo cliente. Sobrevive ao restart e é compartilhado entre réplicas — em
+memória do processo a conversa quebrava no segundo turno assim que existisse mais de um pod.
+Sem isolamento entre sessões além do id.
+
+- Cada turno envia **só a mensagem nova**; o LangGraph carrega o resto do checkpoint. Toda chamada
+  ao agente precisa de `config={"configurable": {"thread_id": ...}}` — sem isso ele nem roda.
+- O checkpointer grava a pergunta antes de existir resposta. Se o cliente desconectar ou o modelo
+  cair no meio, `_rollback_turn` apaga por id o que o turno gravou; sem isso a thread fica com
+  pergunta órfã e o turno seguinte alucina em cima dela.
+- Pool próprio do psycopg3, independente do `QueuePool` da `db/engine.py`. Some
+  `DB_POOL_MAX_SIZE + CHECKPOINTER_POOL_MAX_SIZE`, multiplique pelas réplicas, compare com o
+  `max_connections` do Postgres.
+- As tabelas vêm da migração `0003`, que executa o `setup()` da lib em vez de copiar o DDL — por
+  isso `langgraph-checkpoint-postgres` está preso por `==` no `pyproject.toml`.
+
+`POST /chat` (síncrono, usado pelos evals e pelo REPL) e `POST /chat/stream` (SSE, usado pela
+webui) compartilham o mesmo `services/chat_service.py` — é lá que o endereçamento da thread mora,
+não no router.
 
 ## Testes
 
