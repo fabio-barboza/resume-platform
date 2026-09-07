@@ -14,7 +14,11 @@ from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, Tool
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 
-from resume_agent.guardrails.grounding import _RETRY_FLAG, grounding_guardrail
+from resume_agent.guardrails.grounding import (
+    _RETRY_FLAG,
+    grounding_guardrail,
+    person_mentions,
+)
 
 # Trecho da resposta real que motivou o guardrail: nenhuma ferramenta foi
 # chamada e os três nomes não existem em `resumes_samples/`.
@@ -309,3 +313,40 @@ class TestInsideTheAgentGraph:
             "a segunda tentativa tinha que chamar a ferramenta"
         )
         assert "Larissa Moura" in messages[-1].text
+
+
+class TestPersonMentions:
+    """Os falsos positivos do detector, cada um vindo de uma falha real de eval.
+
+    `person_mentions` é público porque o eval de recomendação compara o que ele
+    extrai com o cadastro real: trecho extraído a mais vira "candidato
+    inventado" e reprova um agente que não inventou nada.
+    """
+
+    def test_conjunction_does_not_glue_two_names(self):
+        """Lista de candidatos reais separada por "e" são dois nomes, não um.
+
+        Falha real: "Larissa, Carlos e Patrícia" saía como a menção única
+        "Carlos e Patrícia", que não bate com cadastro nenhum.
+        """
+        answer = "Os três (Larissa, Carlos e Patrícia) seguem sendo as melhores."
+        assert "Carlos e Patrícia" not in person_mentions(answer)
+
+    def test_two_names_joined_by_conjunction_are_both_found(self):
+        answer = "Encontrei Amanda Rocha e Bruno Carvalho na base."
+        mentions = person_mentions(answer)
+        assert any("Amanda Rocha" in m for m in mentions)
+        assert any("Bruno Carvalho" in m for m in mentions)
+
+    def test_product_and_protocol_names_are_not_people(self):
+        """Nome de produto em Title Case tem a forma de nome de pessoa."""
+        answer = (
+            "Tem experiência com Model Context Protocol, Development "
+            "Orchestrator, Resume Platform e Aprendizado de Máquina."
+        )
+        assert person_mentions(answer) == []
+
+    def test_real_name_with_surname_particle_is_found(self):
+        """A regressão que importa: o detector não pode parar de achar gente."""
+        answer = "**Fabio Barboza de Oliveira** (barboza@example.com) trabalha com RAG."
+        assert person_mentions(answer) == ["Fabio Barboza de Oliveira"]

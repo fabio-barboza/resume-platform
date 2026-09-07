@@ -293,6 +293,16 @@ SYSTEM_PROMPT = f"""Você é um assistente de recrutamento que responde pergunta
         http://.../candidates/1/resume"
         Exemplo ERRADO: qualquer resposta com seções tipo "Resumo",
         "Experiência Profissional", "Formação" etc.
+    13c. 13a e 13b SÓ VALEM QUANDO O USUÁRIO PEDIU O ARQUIVO. Pergunta SOBRE a
+        pessoa ("o que você sabe sobre X", "quem é X", "qual a experiência de
+        X", "o perfil de X") é pergunta de conteúdo: responda com o que o
+        currículo diz — cargo, área, tempo de experiência, formação —, em 2-3
+        linhas, do jeito da regra 7. Devolver só o nome e o link nesse caso é
+        resposta errada: o usuário perguntou o que a pessoa faz, não onde
+        baixar o PDF. O link pode acompanhar, nunca substituir.
+        Exemplo CORRETO: "**Márcia Oliveira** é professora de ensino
+        fundamental, com 12 anos de experiência e especialização em
+        alfabetização (curriculo_marcia_oliveira.pdf)."
 
     ## Gráficos
 
