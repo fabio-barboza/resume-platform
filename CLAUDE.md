@@ -99,6 +99,23 @@ rodar `pytest -m eval`.
 | Critério protegido (classificador LLM, **falha aberto**) | middleware `before_agent` | encerra o turno, zero tool calls |
 | `MAX_RESUME_PAGES` (3) | `_prepare` | `422` |
 | `MAX_TOOL_CALLS_PER_QUESTION` (5) | `ToolCallLimitMiddleware`, `exit_behavior="continue"` | bloqueia a busca excedente, responde com o que tem |
+| Grounding (regex + contagem, determinístico) | middleware `after_model` | descarta a resposta e manda o modelo buscar; na segunda falha do turno, desiste |
+
+O de grounding é a versão em código das regras 6, 9, 10 e 17a do prompt: o modelo responde
+perguntas de recomendação inteiras com zero tool calls, inventando candidato, link de PDF e número
+de gráfico. Ele conta as tool calls desde a última `HumanMessage` — busca de turno anterior não
+fundamenta resposta do turno atual — e procura na resposta três sinais de afirmação sobre a base:
+nome próprio de pessoa, `/candidates/<id>/resume` e fence ` ```chart `. Erra para o lado de
+bloquear; saudação, instrução de API e a recusa do guardrail de critério protegido passam porque
+não citam nenhum dos três. Pelo mesmo motivo o agente usa `get_factual_model()` (temperatura 0):
+com temperatura de conversa ele prefere opinar de cabeça a buscar.
+
+A reação é `jump_to="model"`, não recusa: quem errou foi o modelo, não quem perguntou, então a
+resposta inventada é removida do histórico (`RemoveMessage`) e uma `HumanMessage` corretiva
+marcada com `additional_kwargs["grounding_retry"]` entra no lugar, mandando ele buscar. Essa marca
+é o freio do laço — ela vira o corte do turno, então na segunda falha o guardrail desiste e
+descarta a resposta. `tests/test_grounding_guardrail.py` cobre o veredito chamando o hook direto e
+a segunda volta montando um agente com modelo falso ensaiado; nenhum dos dois precisa de LLM.
 
 Os dois de ingestão moram em `_prepare` (não no router) porque POST e PUT passam pelos mesmos
 motivos, e porque rodam antes da extração e do embedding. Injeção é regex e não LLM de propósito:

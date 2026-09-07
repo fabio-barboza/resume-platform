@@ -7,4 +7,7 @@
 - `discrimination`: middleware do agente, sobre a pergunta do usuário. A entrada
   é o recrutador, e o risco não é sequestro do prompt: é a triagem usar atributo
   que a lei protege.
+- `grounding`: middleware do agente, sobre a resposta pronta. A entrada é o
+  próprio modelo, e o risco é ele falar da base sem ter consultado a base —
+  inventar candidato, link ou número de gráfico.
 """
