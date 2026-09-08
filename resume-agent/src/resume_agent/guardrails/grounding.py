@@ -22,9 +22,11 @@ guardrail de critério protegido) passa intacta.
 import logging
 import re
 import unicodedata
+from typing import Any
 
 from langchain.agents.middleware import AgentState, after_model
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +147,9 @@ def _already_retried(state: AgentState) -> bool:
 
 
 @after_model(name="grounding_guardrail", can_jump_to=["model"])
-def grounding_guardrail(state: AgentState, runtime) -> dict | None:
+def grounding_guardrail(
+    state: AgentState, runtime: Runtime[Any]
+) -> dict[str, Any] | None:
     """Manda o modelo buscar de verdade; se ele insistir, descarta a resposta."""
     messages = state.get("messages") or []
     if not messages:

@@ -16,10 +16,12 @@ agente quando o LLM está fora do ar é indisponibilidade, não segurança.
 """
 
 import logging
+from typing import Any
 
 from langchain.agents.middleware import AgentState, before_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import Runnable
+from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field
 
 from resume_agent.infra import Model
@@ -146,7 +148,9 @@ def _refusal(verdict: CriterionTriage) -> str:
 
 
 @before_agent(can_jump_to=["end"], name="protected_criterion_guardrail")
-def protected_criterion_guardrail(state: AgentState, runtime) -> dict | None:
+def protected_criterion_guardrail(
+    state: AgentState, runtime: Runtime[Any]
+) -> dict[str, Any] | None:
     """Encerra o turno antes de qualquer busca se a pergunta discriminar."""
     question = _last_question(state)
     if not question:

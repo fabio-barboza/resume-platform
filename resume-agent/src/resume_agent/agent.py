@@ -9,10 +9,11 @@ Postgres, não processa PDF. A interface de linha de comando fica em
 import os
 from pathlib import Path
 from textwrap import indent
+from typing import Any
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain.agents.middleware import ToolCallLimitMiddleware
+from langchain.agents.middleware import AgentMiddleware, ToolCallLimitMiddleware
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
@@ -214,6 +215,25 @@ SYSTEM_PROMPT = indent(
     "    ",
 )
 
+# Anotada como `AgentMiddleware` sem parâmetro de propósito: cada middleware
+# declara o próprio state (o de teto de chamadas usa `ToolCallLimitState`, os
+# guardrails usam `AgentState`) e `StateT` é invariante, então a lista
+# heterogênea não unifica sozinha. Misturar states é o uso pretendido pela
+# lib; a anotação é que não alcança.
+MIDDLEWARE: list[AgentMiddleware[Any, Any, Any]] = [
+    # Barra a pergunta antes de qualquer busca; a regra 8 do prompt cobre
+    # o caso complementar, de pergunta que passa.
+    protected_criterion_guardrail,
+    # `continue` em vez de `end`: estourar o teto quase sempre é pergunta
+    # ampla, não agente em loop — resposta parcial vale mais que nenhuma.
+    ToolCallLimitMiddleware(
+        run_limit=MAX_TOOL_CALLS_PER_QUESTION, exit_behavior="continue"
+    ),
+    # Última barreira, sobre a resposta pronta: fala da base sem ter
+    # consultado a base não sai daqui.
+    grounding_guardrail,
+]
+
 agent = create_agent(
     # Temperatura 0: com temperatura de conversa o modelo prefere opinar de
     # cabeça a chamar a ferramenta.
@@ -225,19 +245,7 @@ agent = create_agent(
         list_resumes,
     ],
     system_prompt=SYSTEM_PROMPT,
-    middleware=[
-        # Barra a pergunta antes de qualquer busca; a regra 8 do prompt cobre
-        # o caso complementar, de pergunta que passa.
-        protected_criterion_guardrail,
-        # `continue` em vez de `end`: estourar o teto quase sempre é pergunta
-        # ampla, não agente em loop — resposta parcial vale mais que nenhuma.
-        ToolCallLimitMiddleware(
-            run_limit=MAX_TOOL_CALLS_PER_QUESTION, exit_behavior="continue"
-        ),
-        # Última barreira, sobre a resposta pronta: fala da base sem ter
-        # consultado a base não sai daqui.
-        grounding_guardrail,
-    ],
+    middleware=MIDDLEWARE,
 ).with_config(
     # Sem tracing, `callbacks()` devolve lista vazia e o agente roda igual.
     RunnableConfig(
