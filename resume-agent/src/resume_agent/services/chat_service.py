@@ -86,10 +86,21 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
     """Percorre o stream do agente e traduz em eventos `(event_type, payload)`.
 
     Não formata SSE — quem serializa `data: <json>` é o router. Eventos:
-    `start`, `tool` (status start/end), `token` (delta de texto) e, ao final,
-    `done` ou `error` (nunca os dois).
+    `start`, `tool` (status start/end), `token` (o texto da resposta) e, ao
+    final, `done` ou `error` (nunca os dois).
+
+    O texto sai num `token` só, depois do turno fechar, e não em delta por
+    delta. O motivo é o guardrail de grounding: ele julga a resposta em
+    `after_model`, quando os deltas já teriam ido para a tela. Reprovando, ou
+    ele manda o modelo responder de novo (`jump_to="model"`) ou substitui a
+    resposta pela recusa — nos dois casos o que o usuário já viu não é o que
+    fica no histórico, e a segunda resposta aparecia colada na primeira.
+
+    O preço é não ter mais o texto surgindo aos poucos: a tela fica no
+    indicador de atividade até a resposta fechar. Os eventos de `tool`
+    continuam saindo em tempo real, então o progresso da busca ainda aparece.
     """
-    from langchain_core.messages import AIMessageChunk, ToolMessage
+    from langchain_core.messages import ToolMessage
 
     from resume_agent.agent import agent
 
@@ -102,7 +113,6 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
     previous_ids = _message_ids(agent, config)
 
     user_message = {"role": "user", "content": message}
-    streamed: list[str] = []
     announced_tool_calls: set[str] = set()
     last_values: dict | None = None
 
@@ -122,44 +132,13 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
                             yield "tool", {"name": call.get("name"), "status": "start"}
                 continue
 
-            # mode == "messages": payload é (chunk, metadata)
-            chunk, metadata = payload
+            # mode == "messages": payload é (chunk, metadata). Só o fim de
+            # ferramenta interessa aqui — o texto da resposta sai no final,
+            # depois do veredito do guardrail.
+            chunk, _ = payload
 
             if isinstance(chunk, ToolMessage):
                 yield "tool", {"name": chunk.name, "status": "end"}
-                continue
-
-            if not isinstance(chunk, AIMessageChunk):
-                continue
-
-            # Chamada do classificador do guardrail (guardrails/discrimination.py)
-            # é tagueada com "guardrail" para nunca aparecer na tela do usuário —
-            # sem essa tag e este filtro, o texto da classificação vaza como token.
-            if "guardrail" in (metadata.get("tags") or []):
-                continue
-
-            if metadata.get("langgraph_node") != _MODEL_NODE:
-                continue
-
-            text = chunk.text if hasattr(chunk, "text") else None
-            if text is None:
-                content = chunk.content
-                if isinstance(content, list):
-                    text = "".join(
-                        block.get("text", "")
-                        for block in content
-                        if isinstance(block, dict) and block.get("type") == "text"
-                    )
-                else:
-                    text = content or ""
-
-            if not text:
-                # Chunk só com `tool_call_chunks` (argumento de tool sendo
-                # montado): nunca vai para a tela.
-                continue
-
-            streamed.append(text)
-            yield "token", {"text": text}
     except GeneratorExit:
         _rollback_turn(agent, config, previous_ids)
         raise
@@ -176,10 +155,10 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
         yield "error", {"detail": "Falha ao gerar a resposta. Tente novamente."}
         return
 
+    # A resposta sai do estado final, nunca dos deltas: é o único ponto em que
+    # o veredito do guardrail já está aplicado.
     final = last_values["messages"][-1].content
-    if not "".join(streamed) and final:
-        # Cobre guardrail (resposta pronta sem passar pelo nó do modelo),
-        # provedor sem streaming e resposta inteira vinda num chunk só.
+    if final:
         yield "token", {"text": final}
 
     yield "done", {"content": final}

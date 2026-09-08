@@ -207,6 +207,33 @@ class TestChatStreamShape:
         assert {"name": "find_candidate_by_name", "status": "start"} in tool_events
         assert {"name": "find_candidate_by_name", "status": "end"} in tool_events
 
+    def test_resposta_reprovada_pelo_grounding_nao_chega_na_tela(
+        self, client, monkeypatch
+    ):
+        """O que o usuário vê é a resposta final, não a que o guardrail descartou.
+
+        O guardrail de grounding julga em `after_model`: emitindo delta por
+        delta, a resposta reprovada já teria ido para a tela quando o veredito
+        sai, e a segunda aparecia colada na primeira.
+        """
+        events = [
+            # 1ª passada: resposta inventada, que o guardrail vai descartar
+            _token_chunk("Recomendo Fulano de Tal"),
+            _token_chunk(" e Beltrano da Silva."),
+            # jump_to="model" → 2ª passada, esta é a que vale
+            _token_chunk("Encontrei"),
+            _token_chunk(" Diego Santana."),
+            _final_values("Encontrei Diego Santana."),
+        ]
+        _install_fake_agent(monkeypatch, _FakeAgent(events=events))
+
+        resp = client.post("/chat/stream", json={"session_id": "g2", "message": "oi"})
+        frames = _parse_sse(resp.text)
+        tokens = "".join(data["text"] for event, data in frames if event == "token")
+
+        assert "Fulano de Tal" not in tokens
+        assert tokens == "Encontrei Diego Santana."
+
     def test_guardrail_nao_vaza(self, client, monkeypatch):
         events = [
             _token_chunk("classificação interna vazando", tags=["guardrail"]),
@@ -282,14 +309,21 @@ class TestHistorico:
         """Cliente fecha a aba no meio do stream: nada do turno fica gravado."""
         import resume_agent.agent as agent_module
 
+        # O corte é no evento de ferramenta: como o texto só sai depois do
+        # veredito do guardrail, é o único yield que acontece com o turno ainda
+        # aberto.
         fake = _FakeAgent(
-            events=[_token_chunk("come"), _token_chunk("çando"), _final_values("fim")]
+            events=[
+                _tool_call_values("find_in_resumes", "call-1"),
+                _tool_result_message("find_in_resumes", "trecho", "call-1"),
+                _final_values("fim"),
+            ]
         )
         monkeypatch.setattr(agent_module, "agent", fake)
 
         stream = chat_service.stream_answer("hist-3", "pergunta abandonada")
         next(stream)  # start
-        next(stream)  # primeiro token
+        next(stream)  # tool start, turno ainda aberto
         stream.close()  # GeneratorExit
 
         assert self._messages(fake, "hist-3") == []
