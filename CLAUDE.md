@@ -85,9 +85,9 @@ nenhuma sozinha resolve:
 | `list_resumes` | inventário completo, sem embedding | "quantos", "nenhum", contato |
 
 Só `list_resumes` e `find_candidate_by_name` autorizam o agente a afirmar que alguém **não** está
-na base. O `SYSTEM_PROMPT` em `agent.py` é numerado e as regras 13a-* travam o formato exato do
-link de PDF (`/candidates/<candidate_id>/resume`) — a webui depende desse formato para virar botão
-de visualização. As regras 17-* travam do mesmo jeito o formato da fence ` ```chart ` — o
+na base. O `SYSTEM_PROMPT` em `agent.py` é numerado em ordem crescente (1-28) e as regras 15-19
+travam o formato exato do link de PDF (`/candidates/<candidate_id>/resume`) — a webui depende desse
+formato para virar botão de visualização. As regras 20-25 travam do mesmo jeito o formato da fence ` ```chart ` — o
 `markdown.js:extractCharts` da webui depende dele pra desenhar o gráfico. Mexer no prompt exige
 rodar `pytest -m eval`.
 
@@ -101,7 +101,7 @@ rodar `pytest -m eval`.
 | `MAX_TOOL_CALLS_PER_QUESTION` (5) | `ToolCallLimitMiddleware`, `exit_behavior="continue"` | bloqueia a busca excedente, responde com o que tem |
 | Grounding (regex + contagem, determinístico) | middleware `after_model` | descarta a resposta e manda o modelo buscar; na segunda falha do turno, desiste |
 
-O de grounding é a versão em código das regras 6, 9, 10 e 17a do prompt: o modelo responde
+O de grounding é a versão em código das regras 6, 10, 11 e 21 do prompt: o modelo responde
 perguntas de recomendação inteiras com zero tool calls, inventando candidato, link de PDF e número
 de gráfico. Ele conta as tool calls desde a última `HumanMessage` — busca de turno anterior não
 fundamenta resposta do turno atual — e procura na resposta três sinais de afirmação sobre a base:
