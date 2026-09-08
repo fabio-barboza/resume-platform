@@ -315,6 +315,52 @@ function mountFinalContent(textDiv, content) {
     }
 }
 
+// Mensagem do agente já pronta, sem streaming: usada para restaurar a
+// conversa que veio do servidor. Passa pelo mesmo `mountFinalContent` da
+// resposta ao vivo, então markdown, gráfico e botão de PDF ficam iguais.
+function addAssistantMessage(content) {
+    hideEmptyState()
+
+    const div = document.createElement('div')
+    div.className = 'msg assistant'
+
+    const textDiv = document.createElement('div')
+    div.appendChild(textDiv)
+    mountFinalContent(textDiv, content)
+
+    const actions = buildPdfActions(content)
+    if (actions) div.appendChild(actions)
+
+    chat.appendChild(div)
+    return div
+}
+
+// A thread vive no Postgres e sobrevive ao reload; sem isto a tela abriria
+// vazia enquanto o agente segue no turno anterior, e a próxima pergunta viria
+// respondida por um contexto que o usuário não vê.
+async function restoreConversation() {
+    let messages = []
+    try {
+        const resp = await fetch(`${CHAT_URL}/${encodeURIComponent(sessionId)}`)
+        if (resp.ok) messages = (await resp.json()).messages ?? []
+    } catch {
+        // API fora do ar: o health check já avisa, e a tela vazia é a queda
+        // menos ruim — melhor do que travar o carregamento.
+    }
+
+    if (!messages.length) {
+        renderEmptyState()
+        return
+    }
+
+    for (const { role, content } of messages) {
+        if (role === 'user') addUserMessage(content)
+        else addAssistantMessage(content)
+    }
+    refreshCharts()
+    chat.scrollTop = chat.scrollHeight
+}
+
 function isNearBottom() {
     return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80
 }
@@ -591,6 +637,6 @@ input.addEventListener('input', () => {
 newChatBtn.addEventListener('click', startNewChat)
 closeViewerBtn.addEventListener('click', closeViewer)
 
-renderEmptyState()
+restoreConversation()
 input.focus()
 startHealthCheck()

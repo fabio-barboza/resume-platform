@@ -329,6 +329,71 @@ class TestHistorico:
         assert self._messages(fake, "hist-3") == []
 
 
+class TestHistoricoDaTela:
+    """`GET /chat/{session_id}`: o que a webui monta ao abrir a página.
+
+    Existe porque o checkpointer tornou a thread eterna: sem restaurar a
+    conversa, a tela abre vazia enquanto o agente segue no turno anterior, e o
+    usuário recebe resposta influenciada por um contexto que não vê.
+    """
+
+    def test_devolve_pergunta_e_resposta_em_ordem(self, client, monkeypatch):
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        fake = _FakeAgent()
+        fake._threads["h1"] = [
+            HumanMessage(content="quem sabe Python?", id="u1"),
+            AIMessage(content="Encontrei Diego Santana.", id="a1"),
+        ]
+        _install_fake_agent(monkeypatch, fake)
+
+        body = client.get("/chat/h1").json()
+
+        assert body["session_id"] == "h1"
+        assert body["messages"] == [
+            {"role": "user", "content": "quem sabe Python?"},
+            {"role": "assistant", "content": "Encontrei Diego Santana."},
+        ]
+
+    def test_omite_o_que_nunca_foi_para_a_tela(self, client, monkeypatch):
+        """Ferramenta, preâmbulo com tool_calls e correção do guardrail."""
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+        fake = _FakeAgent()
+        fake._threads["h2"] = [
+            HumanMessage(content="quem sabe Python?", id="u1"),
+            AIMessage(
+                content="Vou buscar na base.",
+                id="a1",
+                tool_calls=[{"name": "find_in_resumes", "args": {}, "id": "c1"}],
+            ),
+            ToolMessage(content="trecho do currículo", tool_call_id="c1", id="t1"),
+            HumanMessage(
+                content="Correção automática do sistema, não do usuário: ...",
+                id="u2",
+                additional_kwargs={"grounding_retry": True},
+            ),
+            AIMessage(content="Encontrei Diego Santana.", id="a2"),
+        ]
+        _install_fake_agent(monkeypatch, fake)
+
+        messages = client.get("/chat/h2").json()["messages"]
+
+        assert messages == [
+            {"role": "user", "content": "quem sabe Python?"},
+            {"role": "assistant", "content": "Encontrei Diego Santana."},
+        ]
+
+    def test_sessao_inexistente_devolve_lista_vazia(self, client, monkeypatch):
+        """Sessão nova e sessão sem histórico são o mesmo caso para o cliente."""
+        _install_fake_agent(monkeypatch, _FakeAgent())
+
+        resp = client.get("/chat/nunca-usada")
+
+        assert resp.status_code == 200
+        assert resp.json()["messages"] == []
+
+
 class TestChatSemStream:
     def test_post_chat_intacto(self, client, monkeypatch):
         import resume_agent.agent as agent_module

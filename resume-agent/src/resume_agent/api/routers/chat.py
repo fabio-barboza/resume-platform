@@ -10,7 +10,11 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from resume_agent.api.schemas.chat import ChatRequest, ChatResponse
+from resume_agent.api.schemas.chat import (
+    ChatHistoryResponse,
+    ChatRequest,
+    ChatResponse,
+)
 from resume_agent.services import chat_service
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -60,4 +64,20 @@ def chat_stream(payload: ChatRequest) -> StreamingResponse:
             # Proxy que enfileira a resposta mata o streaming; o header pede para não bufferizar.
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@router.get(
+    "/{session_id}",
+    response_model=ChatHistoryResponse,
+    summary="Ler a conversa já persistida de uma sessão",
+    description=(
+        "Devolve a conversa do `session_id` em ordem cronológica, só com as "
+        "falas do usuário e do agente. Sessão inexistente devolve lista vazia, "
+        "não 404: para o cliente é o mesmo caso de conversa ainda não iniciada."
+    ),
+)
+def chat_history(session_id: str) -> ChatHistoryResponse:
+    return ChatHistoryResponse(
+        session_id=session_id, messages=chat_service.history(session_id)
     )

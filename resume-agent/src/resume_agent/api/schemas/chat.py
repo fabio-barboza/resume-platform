@@ -57,3 +57,20 @@ class ChatStreamError(BaseModel):
     detail: str = Field(
         description="Mensagem de erro em português, sem detalhe interno da exceção."
     )
+
+
+class ChatMessage(BaseModel):
+    """Uma fala da conversa, como a tela mostra."""
+
+    role: str = Field(description="`user` ou `assistant`.")
+    content: str = Field(description="Texto da fala, em markdown.")
+
+
+class ChatHistoryResponse(BaseModel):
+    """Conversa persistida de um `session_id`, em ordem cronológica."""
+
+    session_id: str = Field(description="A sessão consultada.")
+    messages: list[ChatMessage] = Field(
+        default_factory=list,
+        description="Vazia quando a sessão não existe — não é erro.",
+    )

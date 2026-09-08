@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 # funcionar silenciosamente — reconfirme aqui antes de mexer.
 _MODEL_NODE = "model"
 
+# Marca da `HumanMessage` que o guardrail de grounding injeta ao reprovar uma
+# resposta. Definida em `guardrails/grounding.py`; repetida aqui para não
+# importar o guardrail só por uma string.
+_GROUNDING_RETRY_FLAG = "grounding_retry"
+
 
 def _config(session_id: str) -> dict:
     """Endereço da conversa para o checkpointer."""
@@ -64,6 +69,38 @@ def _rollback_turn(agent, config: dict, previous_ids: set[str]) -> None:
             "pode ter ficado com uma pergunta sem resposta.",
             config["configurable"]["thread_id"],
         )
+
+
+def history(session_id: str) -> list[dict[str, str]]:
+    """A conversa como a tela deve mostrá-la: só pergunta e resposta.
+
+    Existe porque o checkpointer tornou a thread eterna: a webui abre vazia e
+    o agente continua no turno anterior, então o usuário faz uma pergunta nova
+    achando que começou do zero e recebe resposta influenciada pelo que não vê.
+
+    Fica de fora o que é maquinaria e não conversa: resultado de ferramenta,
+    a `AIMessage` que carrega `tool_calls` — mesmo quando também tem texto, que
+    é o agente comentando antes de buscar de novo e nunca foi para a tela — e a
+    `HumanMessage` de correção do guardrail de grounding, que apareceria como
+    se o usuário a tivesse digitado.
+    """
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    from resume_agent.agent import agent
+
+    messages = (agent.get_state(_config(session_id)).values or {}).get("messages", [])
+    turns = []
+    for message in messages:
+        content = getattr(message, "content", None)
+        if not isinstance(content, str) or not content:
+            continue
+        if isinstance(message, HumanMessage):
+            if message.additional_kwargs.get(_GROUNDING_RETRY_FLAG):
+                continue
+            turns.append({"role": "user", "content": content})
+        elif isinstance(message, AIMessage) and not message.tool_calls:
+            turns.append({"role": "assistant", "content": content})
+    return turns
 
 
 def ask(session_id: str, message: str) -> str:
