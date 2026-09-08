@@ -51,7 +51,6 @@ def _parse_sse(body: str) -> list[tuple[str, dict]]:
         assert lines[1].startswith("data: ")
         event = lines[0][len("event: ") :]
         data_raw = lines[1][len("data: ") :]
-        # precisa ser JSON de uma linha só
         assert "\n" not in data_raw
         data = json.loads(data_raw)
         parsed.append((event, data))
@@ -193,7 +192,6 @@ class TestHistorico:
         history_after = chat_service._histories["hist-1"]
         assert history_after[-1].content == "primeira resposta"
 
-        # próximo turno da mesma sessão parte do histórico anterior
         second_events = [_final_values("segunda resposta")]
         fake._events = second_events
         list(chat_service.stream_answer("hist-1", "segunda pergunta"))
@@ -203,13 +201,11 @@ class TestHistorico:
     def test_historico_preservado_apos_excecao(self, monkeypatch):
         import resume_agent.agent as agent_module
 
-        # primeiro turno, bem-sucedido, estabelece o histórico "antes"
         fake = _FakeAgent(events=[_final_values("resposta ok")])
         monkeypatch.setattr(agent_module, "agent", fake)
         list(chat_service.stream_answer("hist-2", "pergunta 1"))
         history_before = list(chat_service._histories["hist-2"])
 
-        # segundo turno levanta exceção no meio do stream
         failing = _FakeAgent(
             events=[_token_chunk("começando..."), _final_values("nunca chega")],
             raise_after=1,

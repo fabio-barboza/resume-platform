@@ -261,8 +261,7 @@ def replace_resume(document_id: int, filename: str, content: bytes) -> Ingestion
     previous_hash = current["file_hash"]
     previous_filename = current["filename"]
 
-    # Grava o arquivo novo antes da transação: se o commit falhar, o banco
-    # nunca fica com o documento apontando para um PDF que não existe.
+    # Mesma ordem do `ingest_resume`: arquivo antes da transação.
     storage.store(filename, digest, content)
     try:
         with transaction() as sess:

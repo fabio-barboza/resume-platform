@@ -34,8 +34,6 @@ def _rows_to_dicts(rows: Iterable[Row[Any]]) -> list[dict[str, Any]]:
     return [dict(row._mapping) for row in rows]
 
 
-# --- candidates -------------------------------------------------------------
-
 _CANDIDATE_COLUMNS = (
     Candidate.id,
     Candidate.name,
@@ -133,8 +131,6 @@ def delete_candidate_if_orphan(session: Session, candidate_id: int) -> bool:
     )
     return session.execute(stmt).first() is not None
 
-
-# --- documents --------------------------------------------------------------
 
 # Contagem de chunks como subquery correlata, não como JOIN + GROUP BY: assim
 # documento sem nenhum chunk continua aparecendo na lista, com zero.
@@ -292,8 +288,6 @@ def delete_document(session: Session, document_id: int) -> bool:
     stmt = delete(Document).where(Document.id == document_id).returning(Document.id)
     return session.execute(stmt).first() is not None
 
-
-# --- chunks -----------------------------------------------------------------
 
 
 def list_chunks_by_candidate(
