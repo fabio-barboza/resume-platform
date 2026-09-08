@@ -102,6 +102,8 @@ toda linha ao carregar o arquivo, e sem eles o eval de gráfico quebra (3 execu�
 | `MAX_RESUME_PAGES` (3) | `_prepare` | `422` |
 | `MAX_TOOL_CALLS_PER_QUESTION` (5) | `ToolCallLimitMiddleware`, `exit_behavior="continue"` | bloqueia a busca excedente, responde com o que tem |
 | Grounding (regex + contagem, determinístico) | middleware `after_model` | descarta a resposta e manda o modelo buscar; na segunda falha do turno, desiste |
+| Link de PDF falso (regex) | mesmo `after_model` | nome de arquivo anunciado como link manda buscar de novo, mesmo tendo havido busca |
+| Gráfico degenerado (JSON + contagem) | mesmo `after_model` | remove a fence com menos de 2 categorias úteis; a resposta em texto fica |
 
 O de grounding é a versão em código das regras 5, 7 e 14 do prompt: o modelo responde
 perguntas de recomendação inteiras com zero tool calls, inventando candidato, link de PDF e número
@@ -111,6 +113,13 @@ nome próprio de pessoa, `/candidates/<id>/resume` e fence ` ```chart `. Erra pa
 bloquear; saudação, instrução de API e a recusa do guardrail de critério protegido passam porque
 não citam nenhum dos três. Pelo mesmo motivo o agente usa `get_factual_model()` (temperatura 0):
 com temperatura de conversa ele prefere opinar de cabeça a buscar.
+
+As outras duas barreiras do mesmo middleware nasceram de regra que o prompt não segurava. O link
+falso é `find_in_resumes` mostrando o nome do arquivo nos metadados e o modelo o promovendo a
+endereço (`Link para baixar o PDF: curriculo_fulano.pdf`) — a webui não vira aquilo em botão. O
+gráfico degenerado é a regra 13 em código: menos de duas categorias com valor não compara nada, e
+tentar segurar isso pela redação do prompt quebrou o eval de gráfico duas vezes, porque mexer no
+texto de uma regra desregula outra. Esse é reparo, não recusa: sai a fence, fica a resposta.
 
 A reação é `jump_to="model"`, não recusa: quem errou foi o modelo, não quem perguntou, então a
 resposta inventada é removida do histórico (`RemoveMessage`) e uma `HumanMessage` corretiva
