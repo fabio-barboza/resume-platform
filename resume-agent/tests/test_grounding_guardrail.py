@@ -16,6 +16,7 @@ from langchain_core.tools import tool
 
 from resume_agent.guardrails.grounding import (
     _RETRY_FLAG,
+    _strip_degenerate_charts,
     grounding_guardrail,
     person_mentions,
 )
@@ -212,6 +213,48 @@ class TestLetsGroundedAnswerThrough:
         )
         assert result is None
 
+    def test_filename_announced_as_pdf_link_is_blocked(self):
+        """O defeito real: `find_in_resumes` mostra o nome do arquivo nos
+        metadados e o modelo o anuncia como link. Busca houve, link não."""
+        result = _run(
+            [
+                HumanMessage("Melhores candidatos para a vaga de IA?"),
+                AIMessage(
+                    "Vou buscar.",
+                    tool_calls=[{"name": "find_in_resumes", "args": {}, "id": "1"}],
+                ),
+                ToolMessage("...", tool_call_id="1", name="find_in_resumes"),
+                AIMessage(
+                    "**Fabio Barboza de Oliveira**\n"
+                    "Link para baixar o PDF: curriculo_Fabio_Oliveira.pdf",
+                    id="a1",
+                ),
+            ]
+        )
+        assert result is not None, "nome de arquivo não é link e não pode passar"
+        assert result.get("jump_to") == "model"
+
+    def test_real_pdf_link_passes(self):
+        """O link no formato da regra 10 é exatamente o que deve sair."""
+        result = _run(
+            [
+                HumanMessage("Manda o currículo da Amanda"),
+                AIMessage(
+                    "Vou buscar.",
+                    tool_calls=[
+                        {"name": "find_candidate_by_name", "args": {}, "id": "1"}
+                    ],
+                ),
+                ToolMessage("...", tool_call_id="1", name="find_candidate_by_name"),
+                AIMessage(
+                    "Encontrei: **Amanda Rocha**. Link para baixar o PDF: "
+                    "http://localhost:8000/candidates/1/resume",
+                    id="a1",
+                ),
+            ]
+        )
+        assert result is None
+
     def test_greeting_passes(self):
         result = _run(
             [
@@ -313,6 +356,68 @@ class TestInsideTheAgentGraph:
             "a segunda tentativa tinha que chamar a ferramenta"
         )
         assert "Larissa Moura" in messages[-1].text
+
+
+class TestGraficoDegenerado:
+    """Regra 13 em código: gráfico que não compara nada sai da resposta.
+
+    A regra é objetiva — contar itens de `data` — e mesmo assim o modelo a
+    furava, ora com uma categoria só, ora inflando a lista com variações
+    zeradas do mesmo termo. Segurar isso pela redação do prompt quebrava
+    outras regras, então virou código.
+    """
+
+    FENCE = "```chart"
+
+    def _resposta(self, data: str) -> str:
+        return f'Texto que responde sozinho.\n\n{self.FENCE}\n{{"type": "bar", "data": {data}}}\n```'
+
+    def test_uma_categoria_e_removida(self):
+        texto = self._resposta('[{"label": "React", "value": 3}]')
+        assert self.FENCE not in _strip_degenerate_charts(texto)
+
+    def test_variacoes_zeradas_nao_viram_categorias(self):
+        """O drible observado: 3 rótulos, mas só um com valor."""
+        texto = self._resposta(
+            '[{"label": "React", "value": 3}, {"label": "React.js", "value": 0},'
+            ' {"label": "ReactJS", "value": 0}]'
+        )
+        assert self.FENCE not in _strip_degenerate_charts(texto)
+
+    def test_comparacao_real_e_mantida(self):
+        texto = self._resposta(
+            '[{"label": "Python", "value": 8}, {"label": "Java", "value": 5}]'
+        )
+        assert self.FENCE in _strip_degenerate_charts(texto)
+
+    def test_o_texto_da_resposta_sobrevive(self):
+        texto = self._resposta('[{"label": "React", "value": 3}]')
+        assert _strip_degenerate_charts(texto) == "Texto que responde sozinho."
+
+    def test_json_invalido_fica_como_esta(self):
+        """Quem avisa de spec quebrado é a webui; aqui não se adivinha."""
+        texto = f"Texto.\n\n{self.FENCE}\nisso não é json\n```"
+        assert _strip_degenerate_charts(texto) == texto.rstrip()
+
+    def test_guardrail_remove_o_grafico_sem_derrubar_a_resposta(self):
+        result = _run(
+            [
+                HumanMessage("Quantos sabem React?"),
+                AIMessage(
+                    "Vou contar.",
+                    tool_calls=[
+                        {"name": "count_candidates_by_skill", "args": {}, "id": "1"}
+                    ],
+                ),
+                ToolMessage(
+                    "React: 3", tool_call_id="1", name="count_candidates_by_skill"
+                ),
+                AIMessage(self._resposta('[{"label": "React", "value": 3}]'), id="a1"),
+            ]
+        )
+        assert result is not None
+        assert "jump_to" not in result, "remover o gráfico não custa outra rodada"
+        assert self.FENCE not in result["messages"][0].content
 
 
 class TestPersonMentions:

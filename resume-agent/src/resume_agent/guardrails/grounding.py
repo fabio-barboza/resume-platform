@@ -19,6 +19,7 @@ cita nenhum dos três (saudação, instrução de upload da regra 15, recusa do
 guardrail de critério protegido) passa intacta.
 """
 
+import json
 import logging
 import re
 import unicodedata
@@ -34,6 +35,17 @@ logger = logging.getLogger(__name__)
 # numa resposta sem busca é número ou ID inventado.
 _CHART_FENCE = re.compile(r"^\s*```chart\b", re.MULTILINE)
 _RESUME_LINK = re.compile(r"/candidates/\d+/resume")
+
+# "Link para baixar o PDF: <coisa>" — o rótulo que a regra 10 manda usar. Casa
+# a linha inteira para dar para conferir o que veio depois dos dois pontos.
+_LINK_LABEL = re.compile(r"[Ll]ink para (?:baixar|acessar|visualizar).{0,20}?:(.*)")
+
+# O bloco inteiro da fence, para conseguir removê-lo do texto.
+_CHART_BLOCK = re.compile(r"[ \t]*```chart[ \t]*\n(.*?)\n[ \t]*```[ \t]*\n?", re.DOTALL)
+
+# Abaixo disto o gráfico não compara nada: uma barra sozinha é a própria
+# resposta em texto, desenhada.
+_MIN_CHART_CATEGORIES = 2
 
 # Nome próprio: duas ou mais palavras Capitalizadas seguidas, aceitando as
 # preposições que ligam sobrenome em português ("Fabio Barboza de Oliveira").
@@ -96,6 +108,16 @@ _RETRY_INSTRUCTION = (
     "pergunta e responda apenas com o que ela devolver."
 )
 
+_FAKE_LINK_INSTRUCTION = (
+    "Correção automática do sistema, não do usuário: você anunciou um link de "
+    "PDF que não é um link — nome de arquivo não abre nada, e a resposta foi "
+    "descartada antes de chegar ao usuário. O único link válido é o campo "
+    "'Link para baixar o PDF' que `find_candidate_by_name` devolve, no formato "
+    "/candidates/<candidate_id>/resume, copiado como está. Chame "
+    "`find_candidate_by_name` e responda com o link de lá, ou não mencione "
+    "link nenhum."
+)
+
 _BLOCK_MESSAGE = (
     "Não consegui responder isso com dados da base. Eu ia responder de memória, "
     "e resposta sobre candidato que não sai de uma busca não vale nada — então "
@@ -130,6 +152,53 @@ def person_mentions(text: str) -> list[str]:
             continue
         mentions.append(span)
     return mentions
+
+
+def _announces_fake_pdf_link(text: str) -> bool:
+    """Anunciou "Link para baixar o PDF" e o que veio depois não é link.
+
+    O caso real: com `find_in_resumes` o modelo vê o nome do arquivo nos
+    metadados do trecho e o apresenta como link
+    ("Link para baixar o PDF: curriculo_fulano.pdf"). A webui não vira aquilo
+    em botão e o usuário fica sem o currículo. É verificável em código, ao
+    contrário do resto do prompt, então não fica dependendo de persuasão.
+    """
+    for match in _LINK_LABEL.finditer(text):
+        if not _RESUME_LINK.search(match.group(1)):
+            return True
+    return False
+
+
+def _strip_degenerate_charts(text: str) -> str:
+    """Remove a fence ```chart``` que tem menos de duas categorias em `data`.
+
+    É a regra 13 do prompt em código. Ela é objetiva — contar itens de uma
+    lista — e mesmo assim o modelo a furava: pedia contagem de uma tecnologia
+    só e desenhava a barra sozinha, ou inflava `data` com variações do mesmo
+    termo zeradas ("React": 3, "React.js": 0). Persuadir por texto não estava
+    segurando, e mexer na redação para segurar quebrava outras regras.
+
+    Remove o gráfico, não a resposta: o texto responde à pergunta por conta
+    própria (regra 12), então o que sobra continua completo. Fence com JSON
+    inválido fica como está — quem avisa disso é a webui.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        try:
+            data = json.loads(match.group(1)).get("data")
+        except (json.JSONDecodeError, AttributeError):
+            return match.group(0)
+        if not isinstance(data, list):
+            return match.group(0)
+        util = [
+            item
+            for item in data
+            if isinstance(item, dict) and item.get("value") not in (0, None)
+        ]
+        return "" if len(util) < _MIN_CHART_CATEGORIES else match.group(0)
+
+    stripped = _CHART_BLOCK.sub(replace, text)
+    return stripped.rstrip() if stripped != text else text
 
 
 def _claims_about_base(text: str) -> str | None:
@@ -185,20 +254,33 @@ def grounding_guardrail(
     if not isinstance(last, AIMessage) or last.tool_calls:
         return None
 
-    if _tool_calls_this_turn(state) > 0:
-        return None
-
     text = last.text or ""
-    claim = _claims_about_base(text)
-    if claim is None:
+
+    # Dois vereditos independentes. O link falso não depende de ter havido
+    # busca: o modelo chama `find_in_resumes`, vê o nome do arquivo no trecho e
+    # o anuncia como link — busca houve, link não.
+    if _announces_fake_pdf_link(text):
+        claim, instruction = "link de PDF inválido", _FAKE_LINK_INSTRUCTION
+    elif (
+        _tool_calls_this_turn(state) == 0
+        and (claim := _claims_about_base(text)) is not None
+    ):
+        instruction = _RETRY_INSTRUCTION
+    else:
+        # Nenhum veredito: a resposta fica, mas gráfico que não compara nada
+        # sai dela. Reparo, não recusa — não custa outra rodada de modelo.
+        repaired = _strip_degenerate_charts(text)
+        if repaired != text and last.id:
+            logger.info("Gráfico com menos de duas categorias removido da resposta.")
+            return {"messages": [AIMessage(content=repaired, id=last.id)]}
         return None
 
     # `info`, não `warning`: barrar é o guardrail funcionando, e no REPL de
     # `__main__.py` o log sai por cima da conversa. Mesma escolha do guardrail
     # de critério protegido.
     logger.info(
-        "Resposta sem fundamento barrada pelo guardrail de grounding "
-        "(sinal=%s, zero tool calls no turno, segunda tentativa=%s).",
+        "Resposta barrada pelo guardrail de grounding (sinal=%s, "
+        "segunda tentativa=%s).",
         claim,
         _already_retried(state),
     )
@@ -211,7 +293,7 @@ def grounding_guardrail(
             "messages": [
                 RemoveMessage(id=last.id),
                 HumanMessage(
-                    content=_RETRY_INSTRUCTION,
+                    content=instruction,
                     additional_kwargs={_RETRY_FLAG: True},
                 ),
             ],
