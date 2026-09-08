@@ -2,7 +2,7 @@
 
 O modelo às vezes responde uma pergunta de recomendação inteira sem emitir
 nenhuma tool call: inventa nomes plausíveis, afirma ter feito "busca semântica"
-e até monta o gráfico com números tirados do nada. As regras 6, 10, 11 e 21 do
+e até monta o gráfico com números tirados do nada. As regras 5, 7 e 14 do
 `SYSTEM_PROMPT` proíbem exatamente isso, mas prompt não é barreira — o mesmo
 motivo pelo qual o detector de injeção é regex e não LLM.
 
@@ -15,7 +15,7 @@ não quem perguntou, e devolver o problema para o usuário é o pior dos dois.
 Determinístico e sem acesso ao banco: conta tool calls do turno e procura no
 texto três sinais de afirmação sobre a base — nome próprio de pessoa, link de
 currículo e fence de gráfico. Erra para o lado de bloquear: resposta que não
-cita nenhum dos três (saudação, instrução de upload da regra 26, recusa do
+cita nenhum dos três (saudação, instrução de upload da regra 15, recusa do
 guardrail de critério protegido) passa intacta.
 """
 
@@ -28,7 +28,7 @@ from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 
 logger = logging.getLogger(__name__)
 
-# Fence de gráfico (regra 20) e link de PDF (regra 17). Qualquer um dos dois
+# Fence de gráfico (regra 12) e link de PDF (regra 10). Qualquer um dos dois
 # numa resposta sem busca é número ou ID inventado.
 _CHART_FENCE = re.compile(r"^\s*```chart\b", re.MULTILINE)
 _RESUME_LINK = re.compile(r"/candidates/\d+/resume")
@@ -120,7 +120,7 @@ def _tool_calls_this_turn(state: AgentState) -> int:
     """Tool calls emitidas desde a última pergunta do usuário.
 
     O corte é a última `HumanMessage`: busca de turno anterior não fundamenta
-    resposta do turno atual — é a regra 11 do prompt, agora em código.
+    resposta do turno atual — é a regra 7 do prompt, agora em código.
     """
     messages = state.get("messages") or []
     turn: list = []

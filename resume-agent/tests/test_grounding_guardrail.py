@@ -79,7 +79,7 @@ class TestSendsTheModelBackToSearch:
         assert _sent_back_to_search(result), "era para mandar buscar antes de responder"
 
     def test_answer_from_memory(self):
-        """Turno novo não herda a busca do turno anterior (regra 11)."""
+        """Turno novo não herda a busca do turno anterior (regra 7)."""
         result = _run(
             [
                 HumanMessage("Quem sabe Python?"),
@@ -99,7 +99,7 @@ class TestSendsTheModelBackToSearch:
         )
 
     def test_invented_chart(self):
-        """Regra 21 em código: número de gráfico sem ferramenta é chute."""
+        """Regra 14 em código: número de gráfico sem ferramenta é chute."""
         answer = 'Distribuição:\n\n```chart\n{"type": "bar", "data": []}\n```'
         result = _run(
             [HumanMessage("Quantos por tecnologia?"), AIMessage(answer, id="a1")]
@@ -107,7 +107,7 @@ class TestSendsTheModelBackToSearch:
         assert _sent_back_to_search(result), "gráfico sem busca deveria parar"
 
     def test_handmade_resume_link(self):
-        """Regra 16 em código: link montado à mão a partir de um ID."""
+        """Regra 10 em código: link montado à mão a partir de um ID."""
         answer = "Link para baixar o PDF: http://localhost:8000/candidates/12/resume"
         result = _run(
             [HumanMessage("Mostre o currículo deles"), AIMessage(answer, id="a1")]
