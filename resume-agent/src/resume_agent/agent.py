@@ -9,7 +9,7 @@ Postgres, não processa PDF. A interface de linha de comando fica em
 import os
 from pathlib import Path
 from textwrap import indent
-from typing import Any
+from typing import Any, cast
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -198,14 +198,10 @@ def list_resumes() -> str:
     return f"Total de currículos na base: {len(records)}\n" + "\n".join(lines)
 
 
-# O texto das regras está em `prompts/system_prompt.md`. As regras 10-11 e
-# 12-14 travam formato porque a webui parseia link de PDF e fence ```chart```.
-# Elas se citam por número: renumerar exige revisar as referências em
-# `grounding.py` e nos middlewares abaixo.
-# O recuo não é cosmético: sem ele o modelo passa a inflar `data` com variações
-# do mesmo termo ("React", "React.js", "ReactJS") e o eval de gráfico quebra —
-# três execuções para três falhas, contra três passagens com o recuo. O arquivo
-# fica sem recuo, para ser markdown legível; a forma validada volta aqui.
+# As regras se citam por número: renumerar exige revisar as referências em
+# `grounding.py` e nos middlewares abaixo. O recuo não é cosmético — sem ele o
+# modelo infla `data` com variações do mesmo termo e o eval de gráfico quebra
+# (3 execuções, 3 falhas). O arquivo fica sem recuo, para ser markdown legível.
 SYSTEM_PROMPT = indent(
     prompts.render(
         "system_prompt.md",
@@ -215,24 +211,21 @@ SYSTEM_PROMPT = indent(
     "    ",
 )
 
-# Anotada como `AgentMiddleware` sem parâmetro de propósito: cada middleware
-# declara o próprio state (o de teto de chamadas usa `ToolCallLimitState`, os
-# guardrails usam `AgentState`) e `StateT` é invariante, então a lista
-# heterogênea não unifica sozinha. Misturar states é o uso pretendido pela
-# lib; a anotação é que não alcança.
-MIDDLEWARE: list[AgentMiddleware[Any, Any, Any]] = [
-    # Barra a pergunta antes de qualquer busca; a regra 8 do prompt cobre
-    # o caso complementar, de pergunta que passa.
-    protected_criterion_guardrail,
-    # `continue` em vez de `end`: estourar o teto quase sempre é pergunta
-    # ampla, não agente em loop — resposta parcial vale mais que nenhuma.
-    ToolCallLimitMiddleware(
-        run_limit=MAX_TOOL_CALLS_PER_QUESTION, exit_behavior="continue"
-    ),
-    # Última barreira, sobre a resposta pronta: fala da base sem ter
-    # consultado a base não sai daqui.
-    grounding_guardrail,
-]
+# Em runtime os três são `AgentMiddleware`, mas nenhum checker chega lá: o
+# pyright esbarra na invariância de `StateT` (o de teto usa `ToolCallLimitState`,
+# os guardrails usam `AgentState`) e o PyCharm não aplica os decorators.
+MIDDLEWARE = cast(
+    list[AgentMiddleware[Any, Any, Any]],
+    [
+        protected_criterion_guardrail,
+        # `continue` em vez de `end`: estourar o teto quase sempre é pergunta
+        # ampla, não agente em loop — resposta parcial vale mais que nenhuma.
+        ToolCallLimitMiddleware(
+            run_limit=MAX_TOOL_CALLS_PER_QUESTION, exit_behavior="continue"
+        ),
+        grounding_guardrail,
+    ],
+)
 
 agent = create_agent(
     # Temperatura 0: com temperatura de conversa o modelo prefere opinar de
