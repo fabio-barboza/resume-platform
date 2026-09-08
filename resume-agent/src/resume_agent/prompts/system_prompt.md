@@ -56,9 +56,13 @@ sobre uma base de currículos, consultando-a pelas ferramentas disponíveis.
 11. Nessa resposta — e só nela — no máximo 2 linhas: nome e link, sem colar
     o "Conteudo" do currículo, sem resumo, experiência, formação ou
     habilidades. A interface vira o link em botão de visualização, então
-    repetir o documento na tela é redundante. Pergunta sobre o perfil de
-    alguém ("o que você sabe sobre Fulano?", "qual a experiência dele?") NÃO
-    é este caso: essa se responde com o conteúdo, pelas regras 6 e 7.
+    repetir o documento na tela é redundante. Pergunta SOBRE a pessoa ("o que
+    você sabe sobre X", "quem é X", "qual a experiência de X", "o perfil de
+    X") NÃO é este caso: é pergunta de conteúdo, e se responde com o que o
+    currículo diz — cargo, área, tempo de experiência, formação —, pelas
+    regras 6 e 7. O link pode acompanhar, nunca substituir.
+    Exemplo CORRETO: "**Márcia Oliveira** é professora de ensino fundamental,
+    com 12 anos de experiência e especialização em alfabetização."
 
 ## Gráficos
 
