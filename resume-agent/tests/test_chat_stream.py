@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
+    HumanMessage,
     RemoveMessage,
     ToolMessage,
 )
@@ -115,6 +116,25 @@ def _parse_sse(body: str) -> list[tuple[str, dict]]:
 def client():
     with TestClient(app) as c:
         yield c
+
+
+def _rendered(frames) -> str:
+    """O texto que sobra na tela, aplicando os `reset` como a webui faz."""
+    buffer = ""
+    for event, data in frames:
+        if event == "reset":
+            buffer = ""
+        elif event == "token":
+            buffer += data["text"]
+    return buffer
+
+
+def _retry_values(content: str):
+    """`values` com a correção do guardrail: sinaliza resposta descartada."""
+    retry = HumanMessage(
+        content=content, id="retry-1", additional_kwargs={"grounding_retry": True}
+    )
+    return ("values", {"messages": [retry]})
 
 
 def _token_chunk(text: str, tags: list[str] | None = None):
@@ -220,7 +240,9 @@ class TestChatStreamShape:
             # 1ª passada: resposta inventada, que o guardrail vai descartar
             _token_chunk("Recomendo Fulano de Tal"),
             _token_chunk(" e Beltrano da Silva."),
-            # jump_to="model" → 2ª passada, esta é a que vale
+            # o guardrail reprova e injeta a correção: jump_to="model"
+            _retry_values("Correção automática do sistema..."),
+            # 2ª passada, esta é a que vale
             _token_chunk("Encontrei"),
             _token_chunk(" Diego Santana."),
             _final_values("Encontrei Diego Santana."),
@@ -229,10 +251,28 @@ class TestChatStreamShape:
 
         resp = client.post("/chat/stream", json={"session_id": "g2", "message": "oi"})
         frames = _parse_sse(resp.text)
-        tokens = "".join(data["text"] for event, data in frames if event == "token")
 
-        assert "Fulano de Tal" not in tokens
-        assert tokens == "Encontrei Diego Santana."
+        assert ("reset", {}) in frames, "sem reset, a 2ª resposta cola na 1ª"
+        assert _rendered(frames) == "Encontrei Diego Santana."
+        assert "Fulano de Tal" not in _rendered(frames)
+
+    def test_resposta_trocada_pela_recusa_tambem_e_corrigida(self, client, monkeypatch):
+        """2ª reprovação do guardrail: sem `jump_to`, troca a resposta pela recusa.
+
+        Não há correção injetada para detectar no meio do stream, então o
+        conserto vem do fecho: texto emitido diferente do estado final manda
+        `reset` antes do texto que vale.
+        """
+        events = [
+            _token_chunk("Recomendo Fulano de Tal."),
+            _final_values("Não consigo responder sem consultar a base."),
+        ]
+        _install_fake_agent(monkeypatch, _FakeAgent(events=events))
+
+        resp = client.post("/chat/stream", json={"session_id": "g3", "message": "oi"})
+        frames = _parse_sse(resp.text)
+
+        assert _rendered(frames) == "Não consigo responder sem consultar a base."
 
     def test_guardrail_nao_vaza(self, client, monkeypatch):
         events = [
@@ -338,8 +378,6 @@ class TestHistoricoDaTela:
     """
 
     def test_devolve_pergunta_e_resposta_em_ordem(self, client, monkeypatch):
-        from langchain_core.messages import AIMessage, HumanMessage
-
         fake = _FakeAgent()
         fake._threads["h1"] = [
             HumanMessage(content="quem sabe Python?", id="u1"),

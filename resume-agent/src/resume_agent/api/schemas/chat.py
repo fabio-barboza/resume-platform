@@ -43,6 +43,14 @@ class ChatStreamTool(BaseModel):
     )
 
 
+class ChatStreamReset(BaseModel):
+    """Descarte o texto já recebido: o que vem depois substitui.
+
+    Emitido quando o guardrail de grounding reprova a resposta e o modelo
+    recomeça. Sem payload — o evento é a instrução inteira.
+    """
+
+
 class ChatStreamDone(BaseModel):
     """Fim normal do turno (`event: done`). Nunca acompanha `error`."""
 

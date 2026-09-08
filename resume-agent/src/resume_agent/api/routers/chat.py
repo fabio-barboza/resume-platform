@@ -43,7 +43,9 @@ def chat(payload: ChatRequest) -> ChatResponse:
         "`event: <tipo>\\ndata: <json>\\n\\n`. Tipos: `start` "
         "(`ChatStreamStart`, sempre primeiro), `tool` (`ChatStreamTool`, "
         "início/fim de chamada de ferramenta), `token` (`ChatStreamToken`, "
-        "delta de texto da resposta), `done` (`ChatStreamDone`, fim normal, "
+        "delta de texto da resposta), `reset` (`ChatStreamReset`, descarte o "
+        "texto recebido até aqui — o guardrail reprovou a resposta e o modelo "
+        "vai recomeçar), `done` (`ChatStreamDone`, fim normal, "
         "`content` é canônico) e `error` (`ChatStreamError`, falha — nunca "
         "acompanha `done`)."
     ),

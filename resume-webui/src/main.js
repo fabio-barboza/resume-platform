@@ -550,6 +550,9 @@ async function runStream(msg, text) {
                 if (data.status === 'start') msg.dropPreamble()
                 msg.setStatus(TOOL_LABELS[data.name] ?? DEFAULT_TOOL_LABEL)
             }
+            // O guardrail de grounding reprovou o que já está na tela e o
+            // modelo vai responder de novo: descarta antes dos novos tokens.
+            if (event === 'reset') msg.dropPreamble()
             if (event === 'token') msg.pushToken(data.text)
             if (event === 'done') msg.finish(data.content)
             if (event === 'error') msg.fail(data.detail)

@@ -38,6 +38,40 @@ def _message_ids(agent, config: dict) -> set[str]:
     return {m.id for m in messages if getattr(m, "id", None)}
 
 
+def _chunk_text(chunk) -> str:
+    """Texto de um chunk do modelo, com `content` em string ou em blocos."""
+    text = chunk.text if hasattr(chunk, "text") else None
+    if text is not None:
+        return text
+    content = chunk.content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return content or ""
+
+
+def _has_new_grounding_retry(values: dict, seen: set[str]) -> bool:
+    """Apareceu uma correção do guardrail que ainda não tínhamos visto?
+
+    A correção é uma `HumanMessage` marcada, injetada quando a resposta é
+    reprovada. Vê-la no estado significa que o texto já emitido foi descartado
+    e o modelo vai responder de novo. Guardamos os ids porque o mesmo `values`
+    reaparece a cada passo do grafo.
+    """
+    novo = False
+    for message in values.get("messages", []):
+        if not message.additional_kwargs.get(_GROUNDING_RETRY_FLAG):
+            continue
+        message_id = getattr(message, "id", None)
+        if message_id and message_id not in seen:
+            seen.add(message_id)
+            novo = True
+    return novo
+
+
 def _rollback_turn(agent, config: dict, previous_ids: set[str]) -> None:
     """Apaga da thread tudo que este turno gravou.
 
@@ -126,18 +160,17 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
     `start`, `tool` (status start/end), `token` (o texto da resposta) e, ao
     final, `done` ou `error` (nunca os dois).
 
-    O texto sai num `token` só, depois do turno fechar, e não em delta por
-    delta. O motivo é o guardrail de grounding: ele julga a resposta em
-    `after_model`, quando os deltas já teriam ido para a tela. Reprovando, ou
-    ele manda o modelo responder de novo (`jump_to="model"`) ou substitui a
-    resposta pela recusa — nos dois casos o que o usuário já viu não é o que
-    fica no histórico, e a segunda resposta aparecia colada na primeira.
+    O guardrail de grounding julga a resposta em `after_model`, quando os
+    deltas já foram para a tela. Reprovando, ele manda o modelo responder de
+    novo (`jump_to="model"`) ou troca a resposta pela recusa — nos dois casos o
+    que o usuário viu não é o que fica no histórico, e a segunda resposta
+    aparecia colada na primeira.
 
-    O preço é não ter mais o texto surgindo aos poucos: a tela fica no
-    indicador de atividade até a resposta fechar. Os eventos de `tool`
-    continuam saindo em tempo real, então o progresso da busca ainda aparece.
+    Daí o evento `reset`: ao detectar que o modelo recomeçou, mandamos o
+    cliente descartar o que já renderizou. O `done` no fim traz o texto
+    canônico, então uma reprovação que escape aqui ainda é corrigida lá.
     """
-    from langchain_core.messages import ToolMessage
+    from langchain_core.messages import AIMessageChunk, ToolMessage
 
     from resume_agent.agent import agent
 
@@ -151,6 +184,10 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
 
     user_message = {"role": "user", "content": message}
     announced_tool_calls: set[str] = set()
+    # Texto já emitido nesta passada do modelo. Zera a cada `reset`, para o que
+    # o cliente tem na tela e o que contamos aqui não divergirem.
+    streamed: list[str] = []
+    retries_seen: set[str] = set()
     last_values: dict | None = None
 
     try:
@@ -161,6 +198,12 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
         ):
             if mode == "values":
                 last_values = payload
+                # A correção do guardrail entrando no estado é o sinal de que a
+                # resposta anterior foi descartada e o modelo vai recomeçar. O
+                # cliente já renderizou aquele texto: mandamos apagar.
+                if streamed and _has_new_grounding_retry(payload, retries_seen):
+                    streamed.clear()
+                    yield "reset", {}
                 for msg in payload.get("messages", []):
                     for call in getattr(msg, "tool_calls", None) or []:
                         call_id = call.get("id")
@@ -169,13 +212,33 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
                             yield "tool", {"name": call.get("name"), "status": "start"}
                 continue
 
-            # mode == "messages": payload é (chunk, metadata). Só o fim de
-            # ferramenta interessa aqui — o texto da resposta sai no final,
-            # depois do veredito do guardrail.
-            chunk, _ = payload
+            # mode == "messages": payload é (chunk, metadata)
+            chunk, metadata = payload
 
             if isinstance(chunk, ToolMessage):
                 yield "tool", {"name": chunk.name, "status": "end"}
+                continue
+
+            if not isinstance(chunk, AIMessageChunk):
+                continue
+
+            # A classificação do guardrail de critério protegido é tagueada
+            # (guardrails/discrimination.py). Sem este filtro o texto dela vaza
+            # como token do agente.
+            if "guardrail" in (metadata.get("tags") or []):
+                continue
+
+            if metadata.get("langgraph_node") != _MODEL_NODE:
+                continue
+
+            text = _chunk_text(chunk)
+            if not text:
+                # Chunk só com `tool_call_chunks`: argumento de ferramenta
+                # sendo montado, nunca vai para a tela.
+                continue
+
+            streamed.append(text)
+            yield "token", {"text": text}
     except GeneratorExit:
         _rollback_turn(agent, config, previous_ids)
         raise
@@ -192,10 +255,13 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
         yield "error", {"detail": "Falha ao gerar a resposta. Tente novamente."}
         return
 
-    # A resposta sai do estado final, nunca dos deltas: é o único ponto em que
-    # o veredito do guardrail já está aplicado.
     final = last_values["messages"][-1].content
-    if final:
+    # Cobre o que o `reset` não alcança: a segunda reprovação do guardrail não
+    # faz `jump_to`, troca a `AIMessage` pela recusa mantendo o `id`, e o texto
+    # descartado já saiu como token. Também cobre resposta sem passar pelo nó do
+    # modelo e provedor que não faz streaming.
+    if "".join(streamed) != final and final:
+        yield "reset", {}
         yield "token", {"text": final}
 
     yield "done", {"content": final}
