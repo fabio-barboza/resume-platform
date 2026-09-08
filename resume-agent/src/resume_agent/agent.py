@@ -35,6 +35,15 @@ STATUS_PENDING = "pending_review"
 # os dois nunca discordarem.
 MAX_TOOL_CALLS_PER_QUESTION = int(os.getenv("MAX_TOOL_CALLS_PER_QUESTION", "5"))
 
+# Quantos candidatos DISTINTOS uma busca semântica traz. O top-k do pgvector é
+# por chunk, e currículo denso no assunto ocupa todas as vagas: numa busca por
+# IA generativa, os 5 chunks de um único candidato tomavam 4 dos 8 primeiros
+# lugares e a resposta saía com "só encontrei 1 perfil". Buscamos com folga e
+# ficamos com o melhor trecho de cada candidato, então o custo em contexto é o
+# mesmo de antes e a diversidade é o dobro.
+CANDIDATES_PER_SEARCH = int(os.getenv("CANDIDATES_PER_SEARCH", "8"))
+_OVERFETCH = 4
+
 
 def _format_identity(name: str | None, email: str | None, phone: str | None) -> str:
     """Como o candidato é apresentado ao modelo.
@@ -61,6 +70,24 @@ def _format_snippet(doc) -> str:
     )
 
 
+def _best_per_candidate(docs: list) -> list:
+    """Melhor trecho de cada candidato, na ordem de similaridade.
+
+    Corta em `CANDIDATES_PER_SEARCH` candidatos. Quem não tem `candidate_id`
+    nos metadados entra como registro próprio, para nunca sumir por acidente.
+    """
+    best, seen = [], set()
+    for doc in docs:
+        key = doc.metadata.get("candidate_id") or id(doc)
+        if key in seen:
+            continue
+        seen.add(key)
+        best.append(doc)
+        if len(best) == CANDIDATES_PER_SEARCH:
+            break
+    return best
+
+
 @tool(response_format="content_and_artifact")
 def find_in_resumes(question: str):
     """Busca semântica no conteúdo dos currículos.
@@ -70,16 +97,19 @@ def find_in_resumes(question: str):
     procurar alguém pelo nome: nome próprio não tem carga semântica e a busca
     devolve outros candidatos. Para nome, use `find_candidate_by_name`.
 
-    Retorna trechos dos currículos mais similares à consulta, cada um com o
-    candidato e o documento de origem. Retorna apenas os trechos mais próximos
-    — não é uma varredura da base inteira, então ausência aqui não prova que
-    o candidato não existe.
+    Devolve o trecho mais parecido de cada candidato, um por candidato, dos
+    mais próximos da consulta. Não é varredura da base inteira: ausência aqui
+    não prova que o candidato não existe, e para isso serve `list_resumes`.
+    O trecho é o que melhor casou com a pergunta, não o currículo inteiro —
+    para o texto completo de alguém, use `find_candidate_by_name`.
 
     Args:
         question: o que procurar, em linguagem natural (ex.: "experiência com
             mainframe e sistemas legados", "automação de testes com Cypress").
     """
-    retrieved_docs = similarity_search(question, k=4)
+    retrieved_docs = _best_per_candidate(
+        similarity_search(question, k=CANDIDATES_PER_SEARCH * _OVERFETCH)
+    )
     serialized = "\n\n".join(_format_snippet(doc) for doc in retrieved_docs)
     return serialized, retrieved_docs
 

@@ -96,8 +96,8 @@ sobre uma base de currículos, consultando-a pelas ferramentas disponíveis.
 14. PROIBIDO INVENTAR NÚMERO NO GRÁFICO. Só entra em `data` valor vindo de
     `count_candidates_by_skill` ou de contagem exata de
     `list_resumes`/`find_candidate_by_name`. Estimativa a partir de
-    `find_in_resumes` não vira gráfico: ela devolve os vizinhos mais
-    próximos (k=4), não a base inteira — mesma lógica da regra 5.
+    `find_in_resumes` não vira gráfico: ela devolve só os candidatos mais
+    próximos da consulta, não a base inteira — mesma lógica da regra 5.
 
 ## Manutenção da base
 

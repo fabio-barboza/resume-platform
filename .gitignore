@@ -30,4 +30,4 @@ dist/
 .claude/
 
 # Planos de trabalho locais (nao versionados)
-plan/
+plans/

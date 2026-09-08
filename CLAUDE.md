@@ -80,7 +80,7 @@ nenhuma sozinha resolve:
 
 | Tool | Como | Por quê |
 |---|---|---|
-| `find_in_resumes` | vetorial, top-k cosseno (k=4) | experiência, tech, formação |
+| `find_in_resumes` | vetorial, cosseno, melhor trecho de cada candidato (8) | experiência, tech, formação |
 | `find_candidate_by_name` | textual em SQL, sem acento, fora de ordem | embedding não recupera pessoa por nome |
 | `count_candidates_by_skill` | contagem literal em SQL (ILIKE, distinct por candidato) | número por tecnologia sem chute do modelo |
 | `list_resumes` | inventário completo, sem embedding | "quantos", "nenhum", contato |

@@ -14,60 +14,58 @@ Rodar:
 
 import pytest
 
+from resume_agent.agent import _OVERFETCH, CANDIDATES_PER_SEARCH
 from resume_agent.db.vector_store import similarity_search
 from resume_agent.services import candidate_service
 
 pytestmark = pytest.mark.eval
 
-# k que `find_in_resumes` usa em produção (agent.py).
-K_PRODUCTION = 4
+# Importado, não cravado: o número já ficou defasado uma vez quando o `k` da
+# tool mudou e este arquivo não. `find_in_resumes` devolve o melhor trecho de
+# cada candidato, então o corte é em candidatos, não em chunks.
+K_PRODUCTION = CANDIDATES_PER_SEARCH
 # Busca mais larga que a de produção, para enxergar quem ficou logo de fora.
-K_MEASURED = 10
+K_MEASURED = K_PRODUCTION + 7
 # Piso de recall@K_PRODUCTION. Abaixo disso a recuperação regrediu.
 MIN_RECALL = 0.80
 
 # Esperado único de propósito: pergunta ambígua mede sorte, não recuperação.
 CASES = [
-    ("eletricista certificado NR-10 para manutenção de painéis elétricos",
-     "Anderson Correia"),
-    ("enfermeira com atuação em UTI adulto e pronto-socorro",
-     "Juliana Matos"),
-    ("gerente de projetos certificado PMP com gestão de portfólio",
-     "Thiago Almeida"),
-    ("design system de aplicativo usado por dezenas de designers",
-     "Bianca Costa"),
-    ("desenvolvedor Android com Kotlin e Jetpack Compose",
-     "Felipe Nogueira"),
-    ("automação de testes end-to-end com Cypress",
-     "Renata Souza"),
-    ("planejamento tributário, SPED e contabilidade fiscal",
-     "Ricardo Teixeira"),
-    ("segurança de aplicações com certificações OSCP e CISSP",
-     "Amanda Rocha"),
-    ("motorista com CNH categoria D e transporte executivo",
-     "José Carlos Martins"),
-    ("staff engineer de Big Tech com sistemas distribuídos de altíssima escala",
-     "Gustavo Pinheiro"),
-    ("professora alfabetizadora do ensino fundamental",
-     "Márcia Oliveira"),
-    ("dashboards em Power BI e pipelines de ETL",
-     "Patrícia Lima"),
-    ("recrutamento e seleção com folha de pagamento e benefícios",
-     "Fernanda Castro"),
-    ("vigilante com monitoramento de CFTV em shopping center",
-     "Marcos Vieira"),
-    ("frontend React com foco em Core Web Vitals e performance",
-     "Diego Santana"),
-    ("modelo de detecção de fraude em tempo real com machine learning",
-     "Larissa Moura"),
-    ("arquiteta de soluções cloud certificada em AWS, Azure e GCP",
-     "Camila Azevedo"),
-    ("secretária executiva com agenda de diretoria e viagens corporativas",
-     "Marisa Ferreira"),
-    ("auxiliar de cozinha com boas práticas de higiene em restaurante",
-     "Maria Aparecida Silva"),
-    ("desenvolvedor full stack júnior em início de carreira",
-     "Vitor Lopes"),
+    (
+        "eletricista certificado NR-10 para manutenção de painéis elétricos",
+        "Anderson Correia",
+    ),
+    ("enfermeira com atuação em UTI adulto e pronto-socorro", "Juliana Matos"),
+    ("gerente de projetos certificado PMP com gestão de portfólio", "Thiago Almeida"),
+    ("design system de aplicativo usado por dezenas de designers", "Bianca Costa"),
+    ("desenvolvedor Android com Kotlin e Jetpack Compose", "Felipe Nogueira"),
+    ("automação de testes end-to-end com Cypress", "Renata Souza"),
+    ("planejamento tributário, SPED e contabilidade fiscal", "Ricardo Teixeira"),
+    ("segurança de aplicações com certificações OSCP e CISSP", "Amanda Rocha"),
+    ("motorista com CNH categoria D e transporte executivo", "José Carlos Martins"),
+    (
+        "staff engineer de Big Tech com sistemas distribuídos de altíssima escala",
+        "Gustavo Pinheiro",
+    ),
+    ("professora alfabetizadora do ensino fundamental", "Márcia Oliveira"),
+    ("dashboards em Power BI e pipelines de ETL", "Patrícia Lima"),
+    ("recrutamento e seleção com folha de pagamento e benefícios", "Fernanda Castro"),
+    ("vigilante com monitoramento de CFTV em shopping center", "Marcos Vieira"),
+    ("frontend React com foco em Core Web Vitals e performance", "Diego Santana"),
+    (
+        "modelo de detecção de fraude em tempo real com machine learning",
+        "Larissa Moura",
+    ),
+    ("arquiteta de soluções cloud certificada em AWS, Azure e GCP", "Camila Azevedo"),
+    (
+        "secretária executiva com agenda de diretoria e viagens corporativas",
+        "Marisa Ferreira",
+    ),
+    (
+        "auxiliar de cozinha com boas práticas de higiene em restaurante",
+        "Maria Aparecida Silva",
+    ),
+    ("desenvolvedor full stack júnior em início de carreira", "Vitor Lopes"),
 ]
 
 # Uma busca por pergunta: embedding custa chamada de API.
@@ -81,13 +79,15 @@ def _ranked_candidates(question: str) -> list[str]:
     mede é o candidato recuperado, não o pedaço de texto.
     """
     if question not in _cache:
-        docs = similarity_search(question, k=K_MEASURED)
+        # Mesma folga da produção: o top-k do pgvector é por chunk, e um
+        # currículo denso ocupa várias vagas antes de aparecer o segundo nome.
+        docs = similarity_search(question, k=K_MEASURED * _OVERFETCH)
         seen: list[str] = []
         for doc in docs:
             name = doc.metadata.get("candidate_name")
             if name and name not in seen:
                 seen.append(name)
-        _cache[question] = seen
+        _cache[question] = seen[:K_MEASURED]
     return _cache[question]
 
 
