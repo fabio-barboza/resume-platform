@@ -39,8 +39,14 @@ _RESUME_LINK = re.compile(r"/candidates/\d+/resume")
 # preposições que ligam sobrenome em português ("Fabio Barboza de Oliveira").
 # Exige inicial maiúscula com resto minúsculo, o que descarta sigla em caixa
 # alta (IA, RAG, MCP, API, PDF) e palavra no meio da frase.
+#
+# O "e" não entra como ligação: em português ele é conjunção muito mais vezes
+# do que parte de sobrenome, e sem essa exclusão uma lista de candidatos reais
+# ("Larissa, Carlos e Patrícia") casava como um nome só — que aí não bate com
+# cadastro nenhum e vira falso positivo de invenção. Nenhum dos nomes da base
+# de exemplo tem "e" no meio.
 _WORD = r"[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][a-záàâãéêíóôõúç]+"
-_LINK_WORD = r"(?:d[aeo]s?|e)"
+_LINK_WORD = r"d[aeo]s?"
 _PROPER_NAME = re.compile(
     rf"\b{_WORD}(?:\s+(?:{_LINK_WORD}\s+)?{_WORD})+\b",
 )
@@ -48,20 +54,31 @@ _PROPER_NAME = re.compile(
 # Termo técnico ou de cargo que também casa com a forma de nome próprio
 # ("Engenheiro de Software Sênior", "Machine Learning", "Visão Computacional").
 # Um único termo desta lista no trecho já o desqualifica como nome de pessoa.
+#
+# É heurística e a lista é incompleta por construção: nome de produto, projeto
+# ou protocolo em Title Case ("Model Context Protocol", "Resume Platform") tem
+# a mesma forma de nome de pessoa e só sai daqui por enumeração. Modelo maior
+# escreve prosa mais rica e encontra termo novo — quando aparecer um falso
+# positivo, o conserto é acrescentar a palavra aqui.
 _NOT_A_PERSON = frozenset((
-        "analista", "aplicada", "aplicado", "api", "arquiteta", "arquiteto",
-        "arquitetura", "artificial", "augmented", "base", "candidata",
-        "candidatas", "candidato", "candidatos", "ciencia", "ciencias",
-        "cientista", "competencias", "computacao", "computacional", "context",
-        "curriculo", "curriculos", "dados", "deep", "desenvolvedor",
-        "desenvolvedora", "development", "distribuidos", "engenharia",
-        "engenheira", "engenheiro", "experiencia", "formacao", "generation",
-        "generativa", "gestao", "habilidades", "inteligencia", "java",
-        "junior", "learning", "lideranca", "linguagem", "link", "machine",
-        "model", "modelos", "orchestrator", "pleno", "preditiva",
-        "processamento", "profissional", "projeto", "projetos", "protocol",
-        "python", "resumo", "retrieval", "science", "senior", "sistemas",
-        "software", "swagger", "tecnologia", "tecnologias", "visao",
+    "analista", "analytics", "api", "aplicada", "aplicado", "aprendizado",
+    "arquiteta", "arquiteto", "arquitetura", "artificial", "augmented",
+    "base", "biblioteca", "candidata", "candidatas", "candidato",
+    "candidatos", "ciencia", "ciencias", "cientista", "cloud",
+    "competencias", "computacao", "computacional", "context", "contexto",
+    "coordenador", "curriculo", "curriculos", "dados", "deep",
+    "desenvolvedor", "desenvolvedora", "development", "digital",
+    "distribuidos", "engenharia", "engenheira", "engenheiro",
+    "experiencia", "formacao", "framework", "frameworks", "generation",
+    "generativa", "generative", "gestao", "habilidades", "inteligencia",
+    "java", "junior", "language", "lead", "learning", "lideranca", "linguagem",
+    "link", "machine", "maquina", "model", "modelos", "natural", "neural",
+    "orchestrator", "orquestracao", "orquestrador", "pipeline",
+    "pipelines", "plataforma", "plataformas", "platform", "pleno",
+    "preditiva", "processamento", "processing", "profissional", "python", "projeto",
+    "projetos", "protocol", "protocolo", "redes", "resume", "resumo",
+    "retrieval", "science", "senior", "sistemas", "software", "solucoes",
+    "solutions", "swagger", "tecnologia", "tecnologias", "visao", "vision",
 ))  # fmt: skip
 
 # Marca a mensagem corretiva que o guardrail injeta, para reconhecê-la depois
@@ -100,6 +117,11 @@ def person_mentions(text: str) -> list[str]:
     """
     mentions = []
     for match in _PROPER_NAME.finditer(text):
+        # Colado num hífen à esquerda é metade de termo composto, não gente:
+        # "Retrieval-Augmented Generation" casava a partir de "Augmented"
+        # porque o `\b` do regex abre depois do hífen.
+        if match.start() > 0 and text[match.start() - 1] == "-":
+            continue
         span = match.group(0)
         words = [_fold(word) for word in span.split()]
         if any(word in _NOT_A_PERSON for word in words):

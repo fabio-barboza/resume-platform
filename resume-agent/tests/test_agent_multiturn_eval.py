@@ -13,6 +13,7 @@ Rodar:
 """
 
 from dataclasses import dataclass, field
+from uuid import uuid4
 
 import pytest
 
@@ -72,20 +73,24 @@ class Turn:
 
 
 class Conversation:
-    """Mantém o histórico entre turnos, como o REPL de `__main__.py`."""
+    """Uma `thread_id` própria: o histórico entre turnos é do checkpointer.
+
+    Mesmo caminho do `chat_service`, que também só envia a mensagem nova e
+    deixa o LangGraph carregar o resto do checkpoint.
+    """
 
     def __init__(self):
-        self.history: list = []
+        self.config = {"configurable": {"thread_id": f"eval-multiturn-{uuid4()}"}}
+        self.previous = 0
 
     def ask(self, question: str) -> Turn:
-        self.history.append({"role": "user", "content": question})
-        previous = len(self.history)
-
-        result = agent.invoke({"messages": self.history})
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": question}]}, self.config
+        )
         messages = result["messages"]
         # Só o deste turno: ferramenta de turno passado não conta.
-        new_messages = messages[previous:]
-        self.history = messages
+        new_messages = messages[self.previous :]
+        self.previous = len(messages)
 
         tools = [
             call["name"]

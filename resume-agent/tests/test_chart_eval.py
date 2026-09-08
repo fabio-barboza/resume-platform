@@ -4,6 +4,7 @@ medidos, pergunta qualitativa não gera gráfico nenhum.
 
 import json
 import re
+from uuid import uuid4
 
 import pytest
 
@@ -17,7 +18,10 @@ _ALLOWED_TYPES = {"bar", "line", "pie", "doughnut"}
 
 
 def _ask(question: str) -> str:
-    result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+    # Thread nova por pergunta: sem `thread_id` o agente com checkpointer não
+    # roda, e reaproveitar um faria uma pergunta contaminar a próxima.
+    config = {"configurable": {"thread_id": f"eval-{uuid4()}"}}
+    result = agent.invoke({"messages": [{"role": "user", "content": question}]}, config)
     return result["messages"][-1].content
 
 

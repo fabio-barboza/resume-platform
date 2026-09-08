@@ -12,11 +12,14 @@ sintéticos e os remove no fim, via a fixture `cleanup_documents`.
 Extração por LLM e embedding são mockados — nenhum teste depende de rede:
 - `Model.get_factual_model` é trocado por algo que estoura exceção, o que
   joga `extract_candidate` no fallback por regex (mesma rede de segurança que
-  já existe em produção para quando o LLM falha). Por isso todo PDF sintético
-  daqui carrega um email no texto: sem nome, email nem telefone a ingestão
-  recusa o arquivo, e o regex é o único extrator de pé nestes testes.
+  já existe em produção para quando o LLM falha).
 - `Model.get_embedding_model` é trocado por um embedder falso que devolve
   vetor zerado do tamanho certo (1024, dimensão da coluna `chunks.embedding`).
+
+Por isso todo PDF sintético daqui carrega um email ou telefone: a ingestão
+recusa currículo sem nome, email nem telefone (`_require_identity`), e com o
+LLM mockado para falhar só o fallback por regex identifica o candidato. O
+contato em si não é o objeto do teste — é o mínimo para o documento entrar.
 """
 
 import pytest
@@ -96,7 +99,7 @@ def test_posting_same_file_twice_is_noop_without_duplicating(cleanup_documents):
 def test_put_with_different_file_swaps_chunks_keeping_document_id(cleanup_documents):
     original = ingestion_service.ingest_resume(
         "cv.pdf",
-        build_pdf("Conteudo original do curriculo, versao um, troca@example.com"),
+        build_pdf("Conteudo original do curriculo, versao um, email um@example.com"),
     )
     cleanup_documents.append(original.document_id)
 
@@ -104,8 +107,7 @@ def test_put_with_different_file_swaps_chunks_keeping_document_id(cleanup_docume
         original.document_id,
         "cv_v2.pdf",
         build_pdf(
-            "Conteudo totalmente novo, versao dois, nada a ver com o primeiro, "
-            "troca@example.com"
+            "Conteudo totalmente novo, versao dois, nada a ver com o primeiro, email dois@example.com"
         ),
     )
 
@@ -120,7 +122,9 @@ def test_put_with_different_file_swaps_chunks_keeping_document_id(cleanup_docume
 
 
 def test_put_with_same_file_is_noop(cleanup_documents):
-    content = build_pdf("Currículo que não vai mudar no PUT, noop@example.com")
+    content = build_pdf(
+        "Currículo que não vai mudar no PUT, email imutavel@example.com"
+    )
     original = ingestion_service.ingest_resume("cv.pdf", content)
     cleanup_documents.append(original.document_id)
 
@@ -133,11 +137,11 @@ def test_put_with_same_file_is_noop(cleanup_documents):
 
 def test_put_with_another_documents_file_returns_409(cleanup_documents):
     doc_a = ingestion_service.ingest_resume(
-        "a.pdf", build_pdf("Currículo do candidato A, a@example.com")
+        "a.pdf", build_pdf("Currículo do candidato A, email a@example.com")
     )
     cleanup_documents.append(doc_a.document_id)
     doc_b = ingestion_service.ingest_resume(
-        "b.pdf", build_pdf("Currículo do candidato B, b@example.com")
+        "b.pdf", build_pdf("Currículo do candidato B, email b@example.com")
     )
     cleanup_documents.append(doc_b.document_id)
 
@@ -145,7 +149,7 @@ def test_put_with_another_documents_file_returns_409(cleanup_documents):
         ingestion_service.replace_resume(
             doc_a.document_id,
             "b.pdf",
-            build_pdf("Currículo do candidato B, b@example.com"),
+            build_pdf("Currículo do candidato B, email b@example.com"),
         )
 
 
@@ -154,7 +158,9 @@ def test_put_failing_midway_does_not_leave_document_without_chunks(
 ):
     original = ingestion_service.ingest_resume(
         "cv.pdf",
-        build_pdf("Currículo íntegro antes da falha simulada, meio@example.com"),
+        build_pdf(
+            "Currículo íntegro antes da falha simulada, email integro@example.com"
+        ),
     )
     cleanup_documents.append(original.document_id)
     assert original.chunk_count > 0
@@ -168,7 +174,7 @@ def test_put_failing_midway_does_not_leave_document_without_chunks(
         ingestion_service.replace_resume(
             original.document_id,
             "cv2.pdf",
-            build_pdf("Currículo novo que nunca é gravado, meio@example.com"),
+            build_pdf("Currículo novo que nunca é gravado, email nunca@example.com"),
         )
 
     # `delete_chunks` rodou na mesma transação que o upsert que falhou: sem
@@ -180,7 +186,8 @@ def test_put_failing_midway_does_not_leave_document_without_chunks(
 
 def test_delete_document_removes_chunks_by_cascade():
     doc = ingestion_service.ingest_resume(
-        "cv.pdf", build_pdf("Currículo que vai ser deletado, cascata@example.com")
+        "cv.pdf",
+        build_pdf("Currículo que vai ser deletado, email deletado@example.com"),
     )
     assert _chunk_count_in_db(doc.document_id) > 0
 
@@ -193,7 +200,7 @@ def test_delete_document_removes_chunks_by_cascade():
 
 def test_delete_leaving_candidate_without_resume_removes_candidate():
     doc = ingestion_service.ingest_resume(
-        "cv.pdf", build_pdf("Currículo único deste candidato, orfao@example.com")
+        "cv.pdf", build_pdf("Currículo único deste candidato, email unico@example.com")
     )
     candidate_id = doc.candidate_id
 
@@ -221,7 +228,9 @@ def test_two_resumes_with_same_email_link_to_same_candidate(cleanup_documents):
 def test_candidate_put_does_not_change_chunk_count(cleanup_documents):
     doc = ingestion_service.ingest_resume(
         "cv.pdf",
-        build_pdf("Currículo de quem vai ter o cadastro editado, cadastro@example.com"),
+        build_pdf(
+            "Currículo de quem vai ter o cadastro editado, email editado@example.com"
+        ),
     )
     cleanup_documents.append(doc.document_id)
     before = _chunk_count_in_db(doc.document_id)

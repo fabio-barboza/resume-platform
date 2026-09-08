@@ -1,7 +1,8 @@
 """Endpoint de chat com o agente. Router fino: histórico e stream ficam no service.
 
-Uma conversa por `session_id`, gerado pelo cliente (webui) e perdida ao
-reiniciar o processo — mesmo comportamento efêmero do REPL em `__main__.py`.
+Uma conversa por `session_id`, gerado pelo cliente (webui) e persistida pelo
+checkpointer do LangGraph no Postgres: sobrevive ao restart e é a mesma para
+qualquer réplica que atenda a requisição.
 """
 
 import json
@@ -21,7 +22,8 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
     summary="Conversar com o agente de currículos",
     description=(
         "Mesmo agente do REPL, exposto por HTTP. O histórico da conversa é "
-        "mantido em memória por `session_id` e não sobrevive a um restart."
+        "persistido no Postgres por `session_id`: sobrevive a um restart e é "
+        "compartilhado entre réplicas."
     ),
 )
 def chat(payload: ChatRequest) -> ChatResponse:

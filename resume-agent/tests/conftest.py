@@ -43,6 +43,13 @@ if _TEST_DB == _APP_DB:
 _MAINTENANCE_URL = _APP_URL.set(database="postgres", drivername="postgresql+psycopg")
 _TEST_URL = _APP_URL.set(database=_TEST_DB, drivername="postgresql+psycopg")
 
+# Redirecionado aqui, no corpo do conftest, e não no fixture: três módulos de
+# teste importam `resume_agent.agent` no topo, e montar o agente já cria o pool
+# do checkpointer a partir desta variável. Fixture roda depois da coleta —
+# tarde demais, o pool já apontaria para o banco da aplicação.
+# DATABASE_URL tem precedência sobre POSTGRES_*, então isto redireciona tudo.
+os.environ["DATABASE_URL"] = _TEST_URL.render_as_string(hide_password=False)
+
 
 def _autocommit_connection():
     """Conexão em autocommit: CREATE/DROP DATABASE não roda em transação."""
@@ -125,8 +132,6 @@ def test_database():
     with _autocommit_connection() as conn:
         conn.execute(text(f'CREATE DATABASE "{_TEST_DB}"'))
 
-    # DATABASE_URL tem precedência sobre POSTGRES_*, então isto redireciona tudo.
-    os.environ["DATABASE_URL"] = _TEST_URL.render_as_string(hide_password=False)
     dispose_engine()
 
     from alembic import command
@@ -138,6 +143,11 @@ def test_database():
     try:
         yield _TEST_URL
     finally:
+        # Sem fechar o pool do checkpointer, o DROP DATABASE encontra conexão
+        # viva — o FORCE resolve, mas o pool fica reconectando em banco morto.
+        from resume_agent.infra import close_checkpointer
+
+        close_checkpointer()
         dispose_engine()
         _drop_test_database()
 

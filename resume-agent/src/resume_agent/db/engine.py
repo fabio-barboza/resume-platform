@@ -52,6 +52,20 @@ def sqlalchemy_url() -> str:
     return url
 
 
+def psycopg_url() -> str:
+    """A mesma URL, sem o prefixo de driver do SQLAlchemy.
+
+    O checkpointer do LangGraph abre conexão com o psycopg cru, que rejeita
+    `postgresql+psycopg://` — para ele o `+psycopg` é lixo no meio da string.
+    `DATABASE_URL` pode chegar nas duas formas (o `conftest.py`, por exemplo,
+    grava a versão com driver), então normalizamos aqui.
+    """
+    url = database_url()
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql://", 1)
+    return url
+
+
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
 
