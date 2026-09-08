@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import ClassVar
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -49,7 +49,7 @@ class _ObservedEmbeddings(OpenAIEmbeddings):
     no-op e sobra só a chamada ao servidor de embeddings.
     """
 
-    def _create(self, texts: List[str]) -> tuple[List[List[float]], dict]:
+    def _create(self, texts: list[str]) -> tuple[list[list[float]], dict]:
         self._ensure_sync_client_available()
         response = self.client.create(input=texts, **self._invocation_params)
         if not isinstance(response, dict):
@@ -58,7 +58,7 @@ class _ObservedEmbeddings(OpenAIEmbeddings):
         usage = response.get("usage", {})
         return embeddings, usage
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         with observability.observation(
             name="embed_query",
             as_type="embedding",
@@ -73,7 +73,7 @@ class _ObservedEmbeddings(OpenAIEmbeddings):
             })
             return embeddings[0]
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         with observability.observation(
             name="embed_documents",
             as_type="embedding",
@@ -90,7 +90,9 @@ class _ObservedEmbeddings(OpenAIEmbeddings):
 
 
 class Model:
-    _instances = {}
+    # Cache de modelos por papel, compartilhado por todo o processo: é estado
+    # do tipo, não de instância — `Model` nunca é instanciada.
+    _instances: ClassVar[dict] = {}
 
     @staticmethod
     def get_model(

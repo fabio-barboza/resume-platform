@@ -36,3 +36,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/resume_agent"]
+
+[tool.ruff.lint.flake8-bugbear]
+# `File()`, `Path()` e afins no valor padrão são como o FastAPI declara
+# parâmetro de rota — não é o default mutável que o B008 procura.
+extend-immutable-calls = [
+    "fastapi.Body",
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Path",
+    "fastapi.Query",
+]

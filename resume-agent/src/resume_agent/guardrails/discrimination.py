@@ -126,9 +126,11 @@ def _refusal(verdict: CriterionTriage) -> str:
     else:
         attributes = "atributo pessoal protegido"
     lines = [
-        f"Não filtro candidatos por {attributes}. Critério protegido: usá-lo "
-        "para triagem é discriminação na contratação, e o dado estar no "
-        "currículo não autoriza selecionar por ele.",
+        (
+            f"Não filtro candidatos por {attributes}. Critério protegido: usá-lo "
+            "para triagem é discriminação na contratação, e o dado estar no "
+            "currículo não autoriza selecionar por ele."
+        ),
     ]
     if verdict.alternative:
         lines.append(

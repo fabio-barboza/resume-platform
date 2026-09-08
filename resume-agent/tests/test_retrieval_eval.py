@@ -169,7 +169,7 @@ def test_aggregate_recall(populated_database):
     print(f"\nRecall sobre {total} perguntas (k medido = {K_MEASURED}):")
     for expected, rank in ranks:
         mark = "ok " if rank is not None and rank <= K_PRODUCTION else "FORA"
-        print(f"  {mark} posição={str(rank or '-'):>2}  {expected}")
+        print(f"  {mark} posição={rank or '-'!s:>2}  {expected}")
     for limit in (1, 3, K_PRODUCTION, K_MEASURED):
         print(f"  recall@{limit}: {recall(limit):.0%}")
 

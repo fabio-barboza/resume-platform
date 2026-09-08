@@ -24,8 +24,8 @@ from sqlalchemy.engine import make_url
 
 load_dotenv()
 
-from resume_agent.db.engine import database_url, dispose_engine  # noqa: E402
-from resume_agent.paths import PROJECT_ROOT  # noqa: E402
+from resume_agent.db.engine import database_url, dispose_engine
+from resume_agent.paths import PROJECT_ROOT
 
 SAMPLES_DIR = PROJECT_ROOT / "resumes_samples"
 
@@ -67,8 +67,10 @@ def build_pdf(text: str) -> bytes:
     objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> "
-        "/MediaBox [0 0 612 792] /Contents 5 0 R >>",
+        (
+            "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> "
+            "/MediaBox [0 0 612 792] /Contents 5 0 R >>"
+        ),
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
         f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
     ]

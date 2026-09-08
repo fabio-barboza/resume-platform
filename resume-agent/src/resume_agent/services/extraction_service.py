@@ -90,7 +90,7 @@ def extract_candidate(text: str) -> CandidateExtraction:
         result = model.invoke(_PROMPT.format(text=text))
         if isinstance(result, CandidateExtraction):
             extracted = result
-    except Exception:
+    except Exception:  # noqa: BLE001 — largo de propósito, ver comentário
         # Extração é best-effort: um currículo sem dados identificados entra
         # com status de revisão pendente em vez de derrubar a ingestão.
         logger.warning("Extração via LLM falhou; caindo no fallback por regex.")
