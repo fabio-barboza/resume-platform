@@ -64,7 +64,8 @@ api/errors.py  → erro de domínio → status HTTP (único lugar que conhece c�
 services/      → regra de negócio, chamável fora do FastAPI
 db/repositories.py, db/vector_store.py → queries; db/errors.py não vaza ORM/driver
 guardrails/    → o que a base recusa receber e o que o agente recusa responder
-agent.py       → as 4 tools + SYSTEM_PROMPT + middlewares
+agent.py       → as 4 tools + middlewares; o texto do prompt vive em prompts/
+prompts/       → system_prompt.md, carregado por `prompts.render` (variáveis `$nome`)
 infra/model.py → factory de modelos (papéis MAIN_*/WORKER_*/EMBEDDING_*, tudo do .env)
 infra/observability.py → único liga/desliga do Langfuse
 ```
@@ -85,11 +86,12 @@ nenhuma sozinha resolve:
 | `list_resumes` | inventário completo, sem embedding | "quantos", "nenhum", contato |
 
 Só `list_resumes` e `find_candidate_by_name` autorizam o agente a afirmar que alguém **não** está
-na base. O `SYSTEM_PROMPT` em `agent.py` é numerado em ordem crescente (1-17) e as regras 10-11
+na base. O `SYSTEM_PROMPT` mora em `prompts/system_prompt.md`, é numerado em ordem crescente (1-17) e as regras 10-11
 travam o formato exato do link de PDF (`/candidates/<candidate_id>/resume`) — a webui depende desse
 formato para virar botão de visualização. As regras 12-14 travam do mesmo jeito o formato da fence ` ```chart ` — o
 `markdown.js:extractCharts` da webui depende dele pra desenhar o gráfico. Mexer no prompt exige
-rodar `pytest -m eval`.
+rodar `pytest -m eval` — inclusive mexer no **recuo**: o `agent.py` reaplica 4 espaços em
+toda linha ao carregar o arquivo, e sem eles o eval de gráfico quebra (3 execuções, 3 falhas).
 
 ### Guardrails são código, não prompt
 
