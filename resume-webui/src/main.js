@@ -1,7 +1,7 @@
 import './style.css'
 import { marked } from 'marked'
 import { readSse } from './sse.js'
-import { renderStream, renderFinal, renderChart, refreshCharts, destroyCharts } from './markdown.js'
+import { renderFinal, renderChart, refreshCharts, destroyCharts } from './markdown.js'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const CHAT_URL = `${API_URL}/chat`
@@ -374,7 +374,6 @@ function addStreamingMessage() {
 
     const statusDiv = document.createElement('div')
     statusDiv.className = 'msg-status'
-    statusDiv.innerHTML = '<span class="typing" role="status" aria-label="Pensando"><i></i><i></i><i></i></span>'
 
     const textDiv = document.createElement('div')
     textDiv.className = 'msg-text'
@@ -384,49 +383,51 @@ function addStreamingMessage() {
     chat.appendChild(div)
     chat.scrollTop = chat.scrollHeight
 
+    // Os tokens são acumulados aqui e NÃO vão para a tela enquanto o turno
+    // corre. O guardrail de grounding só julga a resposta em `after_model`,
+    // depois de ela ter sido gerada inteira: renderizar ao vivo mostrava um
+    // texto que o guardrail descartava em seguida, e o usuário via a resposta
+    // sumir e recomeçar. Enquanto isso, o status (pontinhos + rótulo da
+    // ferramenta) é o único feedback; o texto aparece de uma vez no `finish`.
+    // O buffer continua existindo para o caso de interrupção pelo usuário e
+    // para a mensagem de erro no meio do turno, onde é o que há para mostrar.
     let buffer = ''
-    let rafId = null
 
-    function scheduleRender() {
-        if (rafId !== null) return
-        rafId = requestAnimationFrame(() => {
-            rafId = null
-            const wasNearBottom = isNearBottom()
-            textDiv.innerHTML = renderStream(buffer) + '<span class="stream-cursor"></span>'
-            if (wasNearBottom) chat.scrollTop = chat.scrollHeight
-        })
+    function setStatusHtml(label) {
+        statusDiv.textContent = ''
+        if (label) {
+            const span = document.createElement('span')
+            span.textContent = label
+            statusDiv.appendChild(span)
+        }
+        const dots = document.createElement('span')
+        dots.className = 'typing'
+        dots.setAttribute('role', 'status')
+        dots.setAttribute('aria-label', 'Pensando')
+        dots.innerHTML = '<i></i><i></i><i></i>'
+        statusDiv.appendChild(dots)
     }
 
-    // O render do stream é assíncrono (rAF). Sem cancelar, um frame agendado
-    // pelo último token dispara DEPOIS do `finish` e sobrescreve o HTML final:
-    // gráfico some e o JSON do spec reaparece como texto cru.
-    function cancelPendingRender() {
-        if (rafId === null) return
-        cancelAnimationFrame(rafId)
-        rafId = null
-    }
+    setStatusHtml('')
 
     return {
         getText() {
             return buffer
         },
         setStatus(label) {
-            statusDiv.textContent = label
+            setStatusHtml(label)
         },
         // Texto emitido antes de uma tool call é narração de passagem ("vou
         // rodar em lotes menores") e não faz parte da mensagem final que vem
-        // no `done`. Descartar aqui evita o salto de conteúdo no fim do turno.
+        // no `done`. Descartar mantém o buffer alinhado com o que o `done`
+        // trará, o que importa quando o turno é interrompido no meio.
         dropPreamble() {
-            if (!buffer) return
             buffer = ''
-            scheduleRender()
         },
         pushToken(text) {
             buffer += text
-            scheduleRender()
         },
         finish(content, { interrupted = false } = {}) {
-            cancelPendingRender()
             const wasNearBottom = isNearBottom()
             div.classList.remove('streaming')
             statusDiv.remove()
@@ -445,7 +446,6 @@ function addStreamingMessage() {
             if (wasNearBottom) chat.scrollTop = chat.scrollHeight
         },
         fail(detail) {
-            cancelPendingRender()
             const wasNearBottom = isNearBottom()
             div.classList.remove('streaming')
             statusDiv.remove()

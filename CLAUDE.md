@@ -103,7 +103,7 @@ toda linha ao carregar o arquivo, e sem eles o eval de gráfico quebra (3 execu�
 | `MAX_TOOL_CALLS_PER_QUESTION` (5) | `ToolCallLimitMiddleware`, `exit_behavior="continue"` | bloqueia a busca excedente, responde com o que tem |
 | Grounding (regex + contagem, determinístico) | middleware `after_model` | descarta a resposta e manda o modelo buscar; na segunda falha do turno, desiste |
 | Link de PDF falso (regex) | mesmo `after_model` | nome de arquivo anunciado como link manda buscar de novo, mesmo tendo havido busca |
-| Gráfico degenerado (JSON + contagem) | mesmo `after_model` | remove a fence com menos de 2 categorias úteis; a resposta em texto fica |
+| Gráfico degenerado (JSON + contagem) | mesmo `after_model` | poda categoria de valor 0; sobrando menos de 2, remove a fence — a resposta em texto fica |
 
 O de grounding é a versão em código das regras 5, 7 e 14 do prompt: o modelo responde
 perguntas de recomendação inteiras com zero tool calls, inventando candidato, link de PDF e número
@@ -119,7 +119,17 @@ falso é `find_in_resumes` mostrando o nome do arquivo nos metadados e o modelo 
 endereço (`Link para baixar o PDF: curriculo_fulano.pdf`) — a webui não vira aquilo em botão. O
 gráfico degenerado é a regra 13 em código: menos de duas categorias com valor não compara nada, e
 tentar segurar isso pela redação do prompt quebrou o eval de gráfico duas vezes, porque mexer no
-texto de uma regra desregula outra. Esse é reparo, não recusa: sai a fence, fica a resposta.
+texto de uma regra desregula outra. Esse é reparo, não recusa: a fatia de valor 0 sai do `data` e o
+resto do gráfico fica — descartar a fence inteira por causa de uma categoria zerada tirava da tela
+as que valiam, que é o caso comum na pizza de aderência ("GenAI": 0 no meio de três medidas). Só
+sobrando menos de duas categorias a fence sai, e a resposta em texto fica.
+
+A regra 14 permite um número que não vem de ferramenta: a nota que o próprio agente atribui
+comparando candidatos que ele recuperou naquela rodada (aderência à vaga). É análise dele, não
+contagem sobre a base — o que continua proibido é contar a base por cima do `find_in_resumes`. A
+distinção existe porque o exemplo de recusa que estava na regra 9 ("não tenho número medido para
+plotar") virou política: o modelo passou a recusar todo gráfico de avaliação própria, citando as
+instruções na cara do usuário. Exemplo de *como* recusar vira *quando* recusar.
 
 A reação é `jump_to="model"`, não recusa: quem errou foi o modelo, não quem perguntou, então a
 resposta inventada é removida do histórico (`RemoveMessage`) e uma `HumanMessage` corretiva
@@ -136,6 +146,11 @@ nome de pessoa e só sai de lá por enumeração, e modelo maior escreve prosa m
 termo novo. Falso positivo novo se conserta acrescentando a palavra na lista; os casos
 estruturais (conjunção "e" ligando dois nomes, hífen de termo composto) já estão cobertos em
 `TestPersonMentions`.
+
+Empregador é a exceção que não cabe no blocklist — currículo é feito de nome de empresa, e a lista
+seria infinita. Esse decide pela posição: Title Case logo depois de `na`/`no`/`empresas como`/
+`clientes como` é lugar de trabalho, e o vizinho seguinte numa enumeração ("Magazine Luiza e Banco
+Inter") herda o veredito. `de`/`do`/`da` ficam fora de propósito: antecedem pessoa o tempo todo.
 
 Os dois de ingestão moram em `_prepare` (não no router) porque POST e PUT passam pelos mesmos
 motivos, e porque rodam antes da extração e do embedding. Injeção é regex e não LLM de propósito:
@@ -190,6 +205,13 @@ aborta a suíte se o alvo coincidir com o banco da aplicação. `storage.store`/
 por fixture autouse — nenhum teste precisa de MinIO. Evals (`test_retrieval_eval.py`,
 `test_agent_multiturn_eval.py`) ficam atrás do marcador `eval` porque custam tokens e não são
 determinísticos; foi o eval multi-turno que descobriu o defeito de busca por nome.
+
+`TestJobPostingToChart` é o fluxo do usuário de verdade: anúncio de vaga colado inteiro no primeiro
+turno, "faça um gráfico de pizza da aderência de cada um" no segundo, mesma `thread_id`. Cobre o
+que a pergunta curta de recomendação não alcança — item de lista sem pessoa nomeada (regra 6),
+gráfico recusado (regras 12 e 14) e recusa citando as instruções (regra 9). Ele é o eval a rodar
+depois de mexer no prompt, e reprova em torno de uma rodada em cinco por variação do modelo: rode
+de novo antes de acusar regressão.
 
 ## Contexto de segurança
 

@@ -12,6 +12,8 @@ Rodar:
     pytest -m eval tests/test_agent_multiturno_eval.py -s
 """
 
+import json
+import re
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -68,7 +70,10 @@ class Turn:
             f"{context}\n"
             f"  ferramentas no turno: {self.tools or 'nenhuma'}\n"
             f"  ofereceu buscar: {self.offered_to_search}\n"
-            f"  resposta: {self.answer[:400]}"
+            # Trecho longo de propósito: o que reprova costuma estar no meio da
+            # resposta (nome citado de passagem, fence de gráfico no fim), e
+            # 400 caracteres param no primeiro candidato.
+            f"  resposta: {self.answer[:2000]}"
         )
 
 
@@ -245,4 +250,171 @@ class TestNoInventedCandidates:
         second = conversation.ask("E quem mais poderia servir para essa vaga?")
         assert not invented_names(second.answer), second.diagnosis(
             f"nomes que não existem na base: {invented_names(second.answer)}"
+        )
+
+
+# Anúncio de vaga real, colado como o usuário cola: texto longo, com seções de
+# responsabilidades e diferenciais. É o formato que quebrou na prática — a
+# pergunta curta de recomendação ("melhor candidato para IA aplicada", acima)
+# não reproduz nem o volume de contexto nem a variedade de termos a buscar.
+JOB_POSTING = """Quais os 3 melhores candidatos para essa vaga?
+
+Engenheiro(a) de Inteligência Artificial
+
+Estamos em busca de um(a) Engenheiro(a) de Inteligência Artificial para atuar
+em iniciativas de engenharia, experimentação e aceleração de soluções
+inovadoras em Inteligência Artificial Generativa (GenAI), agentes de IA e
+novas arquiteturas. O profissional terá atuação estratégica no
+desenvolvimento e experimentação de soluções de IA, contribuindo para a
+criação de protótipos, provas de conceito (PoCs) e pilotos de casos de
+negócio. Será responsável por atuar como referência técnica, apoiando
+decisões de arquitetura e aplicação de boas práticas de engenharia.
+
+Principais responsabilidades
+- Atuar como referência técnica no desenvolvimento de soluções de IA;
+- Conduzir a criação de protótipos, PoCs e pilotos usando GenAI e agentes;
+- Definir, desenhar e implementar arquiteturas baseadas em IA Generativa;
+- Desenvolver aplicações utilizando Python, Java e JavaScript;
+- Explorar frameworks de agentes, como Google ADK, CrewAI e similares;
+- Aplicar conceitos de Machine Learning, Dados e MLOps;
+- Atuar em ambientes Cloud, principalmente Google Cloud Platform (GCP).
+
+Requisitos e conhecimentos
+- Experiência em desenvolvimento com Python, Java e/ou JavaScript;
+- Experiência com conceitos de Dados, Machine Learning e MLOps;
+- Experiência com soluções usando GenAI e agentes de IA;
+- Conhecimento em frameworks de orquestração de agentes;
+- Experiência com ambientes Cloud, preferencialmente GCP.
+
+Diferenciais
+- Experiência com LLMs e aplicações de IA Generativa;
+- Conhecimento em engenharia de prompts e integração com APIs de modelos;
+- Vivência na construção de agentes autônomos e soluções multiagentes;
+- Conhecimento em práticas de engenharia de software aplicadas a IA."""
+
+CHART_REQUEST = "Faça um grafico de pizza mostrando o nivel de aderência de cada um"
+
+# Mesmo recorte que o `markdown.js:extractCharts` da webui faz: só a fence
+# ```chart``` vira gráfico na tela. JSON solto ou em ```json``` o usuário vê cru.
+CHART_FENCE = re.compile(r"```chart[ \t]*\n(.*?)\n[ \t]*```", re.DOTALL)
+
+# Item de lista que não é uma pessoa: a regra 6 proíbe fechar os 3 pedidos com
+# categoria genérica ("3. Candidatos com experiência em Python e Cloud"), que
+# foi exatamente como o agente completou a lista quando a busca trouxe menos
+# gente do que o pedido.
+LIST_ITEM = re.compile(
+    r"^\s*(?:\*\*)?([1-3])[.)]\s*(?:\*\*)?\s*(.+?)(?:\*\*)?\s*$", re.MULTILINE
+)
+
+
+def chart_of(answer: str) -> dict | None:
+    """O gráfico que a webui desenharia, ou None se não há fence desenhável."""
+    match = CHART_FENCE.search(answer)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+
+
+def generic_list_items(answer: str) -> list[str]:
+    """Itens numerados que não nomeiam uma pessoa da base."""
+    real = _real_name_tokens()
+    generic = []
+    for _, title in LIST_ITEM.findall(answer):
+        words = {_fold(word) for word in title.split()}
+        if not any(len(words & name) >= 2 for name in real):
+            generic.append(title)
+    return generic
+
+
+class TestJobPostingToChart:
+    """Vaga colada inteira, depois gráfico de aderência — o fluxo do usuário.
+
+    Os dois turnos falharam juntos em produção: o primeiro completou os três
+    lugares com uma categoria genérica no lugar de uma pessoa, e o segundo
+    recusou o gráfico de pizza citando as próprias instruções. Nenhum dos dois
+    é pego pelos evals de recomendação existentes, que usam pergunta curta e
+    param no primeiro turno.
+    """
+
+    @pytest.fixture
+    def analysed(self, conversation) -> tuple[Conversation, Turn]:
+        first = conversation.ask(JOB_POSTING)
+        assert first.queried_database, first.diagnosis(
+            "vaga colada é pergunta de recomendação: exige consultar a base"
+        )
+        return conversation, first
+
+    def test_recommendation_cites_only_real_candidates(self, analysed):
+        _, first = analysed
+        assert not invented_names(first.answer), first.diagnosis(
+            f"nomes que não existem na base: {invented_names(first.answer)}"
+        )
+
+    def test_list_items_are_people_not_categories(self, analysed):
+        """Regra 6: achar menos que 3 é resposta válida; encher a lista não é.
+
+        O caso real: "3. Candidatos com experiência em Python e Cloud", com
+        justificativa e sem nome nenhum, para fechar os três pedidos.
+        """
+        _, first = analysed
+        generic = generic_list_items(first.answer)
+        assert not generic, first.diagnosis(
+            f"item de lista sem pessoa nomeada: {generic}"
+        )
+
+    def test_pie_chart_of_adherence_is_drawn(self, analysed):
+        """Regra 12: pedido explícito de pizza sai como fence ```chart```.
+
+        A nota de aderência é avaliação do próprio agente sobre os candidatos
+        que ele recuperou, não contagem sobre a base — a regra 14 fala de
+        número inventado sobre o conjunto, não de comparar quem ele já
+        analisou. Recusar aqui é a falha que este eval mede.
+        """
+        conversation, _ = analysed
+        second = conversation.ask(CHART_REQUEST)
+
+        chart = chart_of(second.answer)
+        assert chart is not None, second.diagnosis(
+            "pedido explícito de gráfico de pizza não virou fence ```chart``` "
+            "desenhável pela webui"
+        )
+        assert chart.get("type") in ("pie", "doughnut"), second.diagnosis(
+            f"pediram pizza, veio type={chart.get('type')!r}"
+        )
+        data = chart.get("data")
+        assert isinstance(data, list) and len(data) >= 2, second.diagnosis(
+            f"gráfico com menos de duas categorias: {data}"
+        )
+        assert all(
+            isinstance(item, dict) and item.get("value") not in (0, None)
+            for item in data
+        ), second.diagnosis(f"categoria sem valor útil: {data}")
+
+    def test_refusal_never_cites_the_instructions(self, analysed):
+        """Regra 9: o usuário não conhece as regras, então elas não são motivo.
+
+        Vale mesmo quando a recusa for legítima: o texto que apareceu na tela
+        foi "As regras de visualização de dados proíbem a criação de gráficos
+        com apenas um item ou categoria".
+        """
+        conversation, _ = analysed
+        second = conversation.ask(CHART_REQUEST)
+
+        text = _fold(second.answer)
+        leaks = [
+            term
+            for term in (
+                "as regras",
+                "as diretrizes",
+                "minhas instrucoes",
+                "regra 1",
+                "count_candidates_by_skill",
+            )
+            if term in text
+        ]
+        assert not leaks, second.diagnosis(
+            f"resposta expõe as instruções ao usuário: {leaks}"
         )

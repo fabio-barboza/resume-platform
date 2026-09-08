@@ -8,6 +8,9 @@ conversa real em que o agente respondeu quatro turnos sobre candidatos com zero
 tool calls, citando três nomes que não existem na base.
 """
 
+import json
+import re
+
 from langchain.agents import create_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
@@ -358,6 +361,11 @@ class TestInsideTheAgentGraph:
         assert "Larissa Moura" in messages[-1].text
 
 
+def _chart_json(text: str) -> str:
+    """O JSON de dentro da fence ```chart```, como a webui o lê."""
+    return re.search(r"```chart\n(.*?)\n```", text, re.DOTALL).group(1)
+
+
 class TestGraficoDegenerado:
     """Regra 13 em código: gráfico que não compara nada sai da resposta.
 
@@ -383,6 +391,34 @@ class TestGraficoDegenerado:
             ' {"label": "ReactJS", "value": 0}]'
         )
         assert self.FENCE not in _strip_degenerate_charts(texto)
+
+    def test_fatias_zeradas_saem_e_o_resto_do_grafico_fica(self):
+        """O caso misto: pizza de aderência com três medidas e duas zeradas.
+
+        Falha real do eval da vaga de IA — a contagem não achou "GenAI" nem
+        "CrewAI" e o modelo plotou os dois com 0. Descartar a fence inteira
+        por causa disso tirava da tela as três fatias que valiam.
+        """
+        texto = self._resposta(
+            '[{"label": "Python", "value": 8}, {"label": "Java", "value": 5},'
+            ' {"label": "MLOps", "value": 3}, {"label": "GenAI", "value": 0},'
+            ' {"label": "CrewAI", "value": 0}]'
+        )
+        podado = _strip_degenerate_charts(texto)
+        assert self.FENCE in podado
+        labels = [item["label"] for item in json.loads(_chart_json(podado))["data"]]
+        assert labels == ["Python", "Java", "MLOps"], labels
+
+    def test_poda_preserva_o_resto_do_json(self):
+        texto = (
+            f'Texto.\n\n{self.FENCE}\n{{"type": "pie", "title": "Aderência à vaga",'
+            ' "data": [{"label": "Fabio", "value": 9},'
+            ' {"label": "Larissa", "value": 6}, {"label": "Ana", "value": 0}]}\n```'
+        )
+        chart = json.loads(_chart_json(_strip_degenerate_charts(texto)))
+        assert chart["type"] == "pie"
+        assert chart["title"] == "Aderência à vaga"
+        assert len(chart["data"]) == 2
 
     def test_comparacao_real_e_mantida(self):
         texto = self._resposta(
@@ -455,3 +491,56 @@ class TestPersonMentions:
         """A regressão que importa: o detector não pode parar de achar gente."""
         answer = "**Fabio Barboza de Oliveira** (barboza@example.com) trabalha com RAG."
         assert person_mentions(answer) == ["Fabio Barboza de Oliveira"]
+
+    def test_framework_names_are_not_people(self):
+        """Falha real do eval da vaga de IA: "Spring Boot" virou candidato inventado."""
+        answer = "Domina Python e Java (Spring Boot) e Google Cloud Platform."
+        assert person_mentions(answer) == []
+
+    def test_section_headings_and_concepts_are_not_people(self):
+        """Falha real do eval: "Agentes Autônomos", "Recomendação Final"."""
+        answer = (
+            "Vivência em Agentes Autônomos e Modelos Preditivos. "
+            "Recomendação Final: o perfil mais alinhado é o primeiro."
+        )
+        assert person_mentions(answer) == []
+
+    def test_english_job_titles_are_not_people(self):
+        """Falha real do eval da vaga de IA: cargo em inglês em Title Case."""
+        answer = (
+            "Atuou como Staff Engineer e Product Owner, com perfil Full Stack "
+            "e passagem por Site Reliability."
+        )
+        assert person_mentions(answer) == []
+
+    def test_employer_after_preposition_is_not_a_person(self):
+        """Falha real do eval: "na Magazine Luiza", "no Banco Inter".
+
+        Nome de empresa não sai da `_NOT_A_PERSON` por enumeração — a lista
+        seria infinita. O que dá para decidir em código é a posição: em+artigo
+        antes de um Title Case é lugar de trabalho, não gente.
+        """
+        answer = "Atuou na Magazine Luiza e no Banco Inter antes da Nubank."
+        assert person_mentions(answer) == []
+
+    def test_employer_list_after_como_is_not_a_person(self):
+        """Falha real do eval: "em empresas como Magazine Luiza e Banco Inter".
+
+        O segundo da lista não tem prefixo de empregador na frente — tem o
+        primeiro nome — então ele herda o veredito do vizinho pelo "e".
+        """
+        answer = (
+            "Sua atuação em empresas como Magazine Luiza e Banco Inter "
+            "demonstra capacidade de transformar dados em insights."
+        )
+        assert person_mentions(answer) == []
+
+    def test_person_after_employer_list_is_still_found(self):
+        """A herança para no primeiro separador que não é de lista."""
+        answer = "Atuou na Magazine Luiza e no Banco Inter com Larissa Moura."
+        assert person_mentions(answer) == ["Larissa Moura"]
+
+    def test_name_after_de_still_counts_as_person(self):
+        """`de`/`do`/`da` ficam fora da regra: antecedem pessoa o tempo todo."""
+        answer = "O currículo do Gustavo Pinheiro e o da Ana Martins."
+        assert person_mentions(answer) == ["Gustavo Pinheiro", "Ana Martins"]

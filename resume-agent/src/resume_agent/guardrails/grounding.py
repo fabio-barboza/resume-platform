@@ -63,6 +63,24 @@ _PROPER_NAME = re.compile(
     rf"\b{_WORD}(?:\s+(?:{_LINK_WORD}\s+)?{_WORD})+\b",
 )
 
+# "na Magazine Luiza", "em empresas como Magazine Luiza": o que vem antes diz
+# que aquele Title Case é empregador ou lugar, não gente — ninguém escreve
+# "trabalhou na Larissa Moura". É o conserto estrutural do que a
+# `_NOT_A_PERSON` não alcança: nome de empresa só sairia de lá por enumeração
+# infinita, e currículo é feito de empregador. `de`/`do`/`da` ficam de fora de
+# propósito, porque antecedem pessoa o tempo todo ("o currículo do Gustavo
+# Pinheiro").
+_EMPLOYER_PREFIX = re.compile(
+    r"\b(?:[Nn][ao]s?|empresas?(?:\s+como)?|clientes?(?:\s+como)?"
+    r"|companhias?|bancos?|startups?)\s+$"
+)
+
+# O que separa dois itens de uma lista: "Magazine Luiza e Banco Inter",
+# "Nubank, Loggi e iFood". O segundo nome não tem o prefixo de empregador na
+# frente — tem o primeiro nome — então ele herda o veredito do vizinho, senão
+# só o primeiro da lista seria descartado.
+_ENUMERATION_GAP = re.compile(r"^[\s,]*(?:e|ou)?[\s,]*$")
+
 # Termo técnico ou de cargo que também casa com a forma de nome próprio
 # ("Engenheiro de Software Sênior", "Machine Learning", "Visão Computacional").
 # Um único termo desta lista no trecho já o desqualifica como nome de pessoa.
@@ -71,28 +89,34 @@ _PROPER_NAME = re.compile(
 # ou protocolo em Title Case ("Model Context Protocol", "Resume Platform") tem
 # a mesma forma de nome de pessoa e só sai daqui por enumeração. Modelo maior
 # escreve prosa mais rica e encontra termo novo — quando aparecer um falso
-# positivo, o conserto é acrescentar a palavra aqui.
+# positivo, o conserto é acrescentar a palavra aqui. Os termos em inglês
+# ("Staff Engineer", "Product Owner", "Full Stack") entraram por essa via: o
+# eval da vaga de IA os viu como candidato inventado.
 _NOT_A_PERSON = frozenset((
-    "analista", "analytics", "api", "aplicada", "aplicado", "aprendizado",
-    "arquiteta", "arquiteto", "arquitetura", "artificial", "atua",
-    "augmented", "base", "biblioteca", "big", "candidata", "candidatas",
-    "candidato", "candidatos", "certificacao", "ciencia", "ciencias",
-    "cientista", "cloud", "competencias", "computacao", "computacional",
-    "context", "contexto", "coordenador", "curriculo", "curriculos",
-    "dados", "data", "deep", "desenvolvedor", "desenvolvedora",
-    "development", "digital", "distribuidos", "doutorado", "engenharia",
-    "engenheira", "engenheiro", "especializacao", "experiencia", "formacao",
-    "framework", "frameworks", "generation", "generativa", "generative",
-    "gestao", "graduacao", "habilidades", "inteligencia", "java", "junior",
-    "language", "lead", "learning", "lideranca", "linguagem", "link",
-    "machine", "maquina", "mestrado", "model", "modelos", "natural",
-    "neural", "orchestrator", "orquestracao", "orquestrador", "pipeline",
-    "pipelines", "plataforma", "plataformas", "platform", "pleno", "pos",
-    "possui", "preditiva", "processamento", "processing", "profissional",
-    "projeto", "projetos", "protocol", "protocolo", "python", "redes",
-    "resume", "resumo", "retrieval", "science", "senior", "sistemas",
-    "software", "solucoes", "solutions", "swagger", "tecnologia",
-    "tecnologias", "visao", "vision",
+    "agente", "agentes", "analista", "analytics", "api", "aplicada",
+    "aplicado", "aprendizado", "arquiteta", "arquiteto", "arquitetura",
+    "artificial", "atua", "augmented", "autonoma", "autonomas", "autonomo",
+    "autonomos", "backend", "base", "biblioteca", "big", "boot", "candidata",
+    "candidatas", "candidato", "candidatos", "certificacao", "ciencia",
+    "ciencias", "cientista", "cloud", "competencias", "computacao",
+    "computacional", "context", "contexto", "coordenador", "curriculo",
+    "curriculos", "dados", "data", "deep", "desenvolvedor", "desenvolvedora",
+    "developer", "development", "devops", "digital", "distribuidos",
+    "doutorado", "engenharia", "engenheira", "engenheiro", "engineer",
+    "engineering", "especializacao", "experiencia", "final", "formacao",
+    "framework", "frameworks", "frontend", "full", "generation", "generativa",
+    "generative", "gestao", "graduacao", "habilidades", "inteligencia", "java",
+    "junior", "language", "lead", "learning", "lideranca", "linguagem", "link",
+    "machine", "manager", "maquina", "mestrado", "model", "modelos", "natural",
+    "neural", "orchestrator", "orquestracao", "orquestrador", "owner",
+    "pipeline", "pipelines", "plataforma", "plataformas", "platform", "pleno",
+    "pos", "possui", "preditiva", "preditivo", "preditivos", "principal",
+    "processamento", "processing", "product", "profissional", "projeto",
+    "projetos", "protocol", "protocolo", "python", "recomendacao",
+    "recomendacoes", "redes", "reliability", "resume", "resumo", "retrieval",
+    "science", "scientist", "senior", "sistemas", "site", "software",
+    "solucoes", "solutions", "specialist", "spring", "stack", "staff",
+    "swagger", "tech", "tecnologia", "tecnologias", "visao", "vision",
 ))  # fmt: skip
 
 # Marca a mensagem corretiva que o guardrail injeta, para reconhecê-la depois
@@ -140,12 +164,21 @@ def person_mentions(text: str) -> list[str]:
     mesma extração para conferir se todo nome citado existe mesmo na base.
     """
     mentions = []
+    previous_employer_end = None
     for match in _PROPER_NAME.finditer(text):
         # Colado num hífen à esquerda é metade de termo composto, não gente:
         # "Retrieval-Augmented Generation" casava a partir de "Augmented"
         # porque o `\b` do regex abre depois do hífen.
         if match.start() > 0 and text[match.start() - 1] == "-":
             continue
+        before = text[max(0, match.start() - 24) : match.start()]
+        continues_list = previous_employer_end is not None and _ENUMERATION_GAP.match(
+            text[previous_employer_end : match.start()]
+        )
+        if _EMPLOYER_PREFIX.search(before) or continues_list:
+            previous_employer_end = match.end()
+            continue
+        previous_employer_end = None
         span = match.group(0)
         words = [_fold(word) for word in span.split()]
         if any(word in _NOT_A_PERSON for word in words):
@@ -170,13 +203,20 @@ def _announces_fake_pdf_link(text: str) -> bool:
 
 
 def _strip_degenerate_charts(text: str) -> str:
-    """Remove a fence ```chart``` que tem menos de duas categorias em `data`.
+    """Poda categoria sem valor e, se sobrar menos de duas, remove a fence.
 
     É a regra 13 do prompt em código. Ela é objetiva — contar itens de uma
     lista — e mesmo assim o modelo a furava: pedia contagem de uma tecnologia
     só e desenhava a barra sozinha, ou inflava `data` com variações do mesmo
     termo zeradas ("React": 3, "React.js": 0). Persuadir por texto não estava
     segurando, e mexer na redação para segurar quebrava outras regras.
+
+    A poda vem antes do descarte porque o caso comum é misto: pizza de
+    aderência com três fatias medidas e duas zeradas ("GenAI": 0, "CrewAI": 0,
+    dos termos que a contagem não achou). Fatia de valor 0 não é desenhada —
+    ela só ocupa a legenda — então jogar fora o gráfico inteiro por causa dela
+    tira da tela as três que valiam. Sobrando menos de duas categorias úteis aí
+    sim a fence sai: uma fatia sozinha é a resposta em texto, desenhada.
 
     Remove o gráfico, não a resposta: o texto responde à pergunta por conta
     própria (regra 12), então o que sobra continua completo. Fence com JSON
@@ -185,7 +225,8 @@ def _strip_degenerate_charts(text: str) -> str:
 
     def replace(match: re.Match[str]) -> str:
         try:
-            data = json.loads(match.group(1)).get("data")
+            chart = json.loads(match.group(1))
+            data = chart.get("data")
         except (json.JSONDecodeError, AttributeError):
             return match.group(0)
         if not isinstance(data, list):
@@ -195,7 +236,14 @@ def _strip_degenerate_charts(text: str) -> str:
             for item in data
             if isinstance(item, dict) and item.get("value") not in (0, None)
         ]
-        return "" if len(util) < _MIN_CHART_CATEGORIES else match.group(0)
+        if len(util) < _MIN_CHART_CATEGORIES:
+            return ""
+        if len(util) == len(data):
+            return match.group(0)
+        chart["data"] = util
+        rendered = json.dumps(chart, ensure_ascii=False, indent=2)
+        logger.info("Categorias sem valor removidas do gráfico.")
+        return f"```chart\n{rendered}\n```\n"
 
     stripped = _CHART_BLOCK.sub(replace, text)
     return stripped.rstrip() if stripped != text else text

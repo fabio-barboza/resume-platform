@@ -676,27 +676,6 @@ body {
   display: none;
 }
 
-/* Cauda pendente (fence/tabela/linha em construção): texto puro, mais apagado. */
-.pending {
-  opacity: 0.7;
-  white-space: pre-wrap;
-}
-
-.stream-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 1px;
-  background: var(--text);
-  vertical-align: text-bottom;
-  animation: blink-cursor 0.9s step-end infinite;
-}
-
-@keyframes blink-cursor {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
 .msg-interrupted-note {
   margin-top: 8px;
   font-size: 12.5px;

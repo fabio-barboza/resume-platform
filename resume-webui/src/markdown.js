@@ -1,85 +1,12 @@
-// Render incremental fence-aware. `marked.parse()` sobre markdown pela metade
-// renderiza lixo: tabela sem separador vira parágrafo, fence sem fechamento
-// engole o resto da resposta, link de PDF cortado vira texto cru — ou pior,
-// um botão "Ver currículo" apontando para lugar nenhum.
+// Render do markdown da resposta e dos gráficos.
 //
-// A solução é separar o buffer em prefixo estável (já dá para renderizar) e
-// cauda pendente (ainda em construção, mostrada como texto puro).
+// A resposta só é renderizada inteira, no `done`: o guardrail de grounding
+// julga o texto depois de gerado, e o que ele reprova nunca chega à tela.
+// Por isso não existe mais render incremental (prefixo estável + cauda
+// pendente) — `marked.parse()` sempre recebe markdown completo.
 
 import { marked } from 'marked'
 import Chart from 'chart.js/auto'
-
-/**
- * @param {string} text
- * @returns {{ stable: string, pending: string }}
- */
-export function splitStable(text) {
-    const fenceIdx = findOpenFenceIndex(text)
-    if (fenceIdx !== null) {
-        return { stable: text.slice(0, fenceIdx), pending: text.slice(fenceIdx) }
-    }
-
-    const tableIdx = findOpenTableIndex(text)
-    if (tableIdx !== null) {
-        return { stable: text.slice(0, tableIdx), pending: text.slice(tableIdx) }
-    }
-
-    if (!text.endsWith('\n')) {
-        const lineStart = text.lastIndexOf('\n') + 1
-        if (lineStart < text.length) {
-            return { stable: text.slice(0, lineStart), pending: text.slice(lineStart) }
-        }
-    }
-
-    return { stable: text, pending: '' }
-}
-
-// Regra 1: fence aberta. Conta ``` no início de linha; se for ímpar, o
-// bloco em construção (a partir da fence de abertura) inteiro vai para
-// `pending` — é o que garante que um bloco ```chart só é processado com o
-// dado inteiro.
-function findOpenFenceIndex(text) {
-    const lines = text.split('\n')
-    let offset = 0
-    let count = 0
-    let openOffset = null
-
-    for (const line of lines) {
-        if (/^```/.test(line)) {
-            count++
-            openOffset = count % 2 === 1 ? offset : null
-        }
-        offset += line.length + 1
-    }
-
-    return count % 2 === 1 ? openOffset : null
-}
-
-// Regra 2: tabela em construção. Se as últimas linhas começam com `|` e
-// ainda não existe linha em branco depois delas, o bloco inteiro vai para
-// `pending`.
-function findOpenTableIndex(text) {
-    const lines = text.split('\n')
-    const offsets = []
-    let offset = 0
-    for (const line of lines) {
-        offsets.push(offset)
-        offset += line.length + 1
-    }
-
-    let start = null
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i]
-        if (line.trim() === '') break
-        if (line.startsWith('|')) {
-            start = i
-        } else {
-            break
-        }
-    }
-
-    return start === null ? null : offsets[start]
-}
 
 function escapeHtml(str) {
     return str
@@ -90,18 +17,7 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;')
 }
 
-/** Caminho do meio do stream: `stable` vira markdown, `pending` entra como texto escapado. */
-export function renderStream(text) {
-    const { stable, pending } = splitStable(text)
-    const html = marked.parse(stable)
-    if (!pending) return html
-    return `${html}<span class="pending">${escapeHtml(pending)}</span>`
-}
-
-// Gráfico trafega como fence ```chart contendo um JSON. Fence é a única
-// construção de markdown com delimitador de fechamento explícito, então o
-// parser incremental sabe com certeza quando o dado acabou — e a regra 1 do
-// `splitStable` já garante que nenhum ponto é plotado antes do fence fechar.
+// Gráfico trafega como fence ```chart contendo um JSON.
 // Qualquer fence (```chart, ```json ou sem tag) cujo corpo seja um spec de
 // gráfico vira gráfico: o modelo erra a tag com frequência e o usuário não
 // tem culpa. Fence com tag `chart` é aceita mesmo sem `data` reconhecível —
@@ -162,8 +78,8 @@ export function extractCharts(markdown) {
 }
 
 /**
- * Caminho do `done`: markdown completo, sem cauda. Único lugar que chama
- * `extractCharts` — `renderStream` nunca desenha gráfico.
+ * Caminho do `done`: markdown completo. Único lugar que chama
+ * `extractCharts`.
  */
 export function renderFinal(text) {
     const { markdown, charts } = extractCharts(text)

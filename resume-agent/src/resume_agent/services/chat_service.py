@@ -160,15 +160,17 @@ def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
     `start`, `tool` (status start/end), `token` (o texto da resposta) e, ao
     final, `done` ou `error` (nunca os dois).
 
-    O guardrail de grounding julga a resposta em `after_model`, quando os
-    deltas já foram para a tela. Reprovando, ele manda o modelo responder de
-    novo (`jump_to="model"`) ou troca a resposta pela recusa — nos dois casos o
-    que o usuário viu não é o que fica no histórico, e a segunda resposta
-    aparecia colada na primeira.
+    O guardrail de grounding julga a resposta em `after_model`, depois de ela
+    ter saído inteira em deltas. Reprovando, ele manda o modelo responder de
+    novo (`jump_to="model"`) ou troca a resposta pela recusa — nos dois casos
+    o texto já emitido não é o que fica no histórico.
 
     Daí o evento `reset`: ao detectar que o modelo recomeçou, mandamos o
-    cliente descartar o que já renderizou. O `done` no fim traz o texto
-    canônico, então uma reprovação que escape aqui ainda é corrigida lá.
+    cliente descartar o que acumulou. A webui não pinta os tokens na tela
+    justamente por isso (ela mostra o status enquanto o turno corre e só
+    renderiza no `done`), mas os acumula para o caso de interrupção — e o
+    `done` no fim traz o texto canônico, então uma reprovação que escape aqui
+    ainda é corrigida lá.
     """
     from langchain_core.messages import AIMessageChunk, ToolMessage
 
