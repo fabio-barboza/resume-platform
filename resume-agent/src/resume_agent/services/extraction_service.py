@@ -86,7 +86,15 @@ def extract_candidate(text: str) -> CandidateExtraction:
 
     extracted = CandidateExtraction()
     try:
-        model = Model.get_factual_model().with_structured_output(CandidateExtraction)
+        # `function_calling` e não o `json_schema` nativo: o endpoint do
+        # DeepSeek recusa `response_format` de schema com 400 ("This
+        # response_format type is unavailable now"), a extração caía no
+        # fallback por regex e a base inteira entrava sem nome. Tool calling
+        # funciona nos três modelos avaliados, então trocar de modelo continua
+        # sendo só trocar a variável do .env.
+        model = Model.get_factual_model().with_structured_output(
+            CandidateExtraction, method="function_calling"
+        )
         result = model.invoke(_PROMPT.format(text=text))
         if isinstance(result, CandidateExtraction):
             extracted = result

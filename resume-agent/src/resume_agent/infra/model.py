@@ -1,3 +1,4 @@
+import json
 import os
 from typing import ClassVar
 
@@ -21,12 +22,19 @@ _DEFAULT_PROVIDER = os.getenv("MODEL_PROVIDER", "openai")
 
 
 def _role_config(role: str) -> dict:
-    """Lê a config de um papel (MAIN/WORKER), caindo nos genéricos."""
+    """Lê a config de um papel (MAIN/WORKER), caindo nos genéricos.
+
+    O parâmetro que desliga o raciocínio muda de modelo para modelo (Qwen usa
+    `chat_template_kwargs.enable_thinking`, DeepSeek usa `thinking.type`), então
+    fica no .env como JSON cru (`{role}_MODEL_EXTRA_BODY`) em vez de hardcoded —
+    trocar de modelo é só trocar a variável, sem tocar em código.
+    """
     return {
         "model": os.getenv(f"{role}_MODEL", "qwen3.6:35B"),
         "base_url": os.getenv(f"{role}_MODEL_BASE_URL", _DEFAULT_BASE_URL),
         "api_key": os.getenv(f"{role}_MODEL_API_KEY", _DEFAULT_API_KEY),
         "provider": os.getenv(f"{role}_MODEL_PROVIDER", _DEFAULT_PROVIDER),
+        "extra_body": json.loads(os.getenv(f"{role}_MODEL_EXTRA_BODY", "{}")),
     }
 
 
@@ -101,10 +109,18 @@ class Model:
         api_key: str,
         provider: str,
         temperature: float = 0,
+        extra_body: dict | None = None,
     ):
-        # base_url entra na chave: mesmo nome de modelo em provedores
-        # diferentes são instâncias distintas.
-        key = (provider, base_url, model, temperature)
+        extra_body = extra_body or {}
+        # base_url e extra_body entram na chave: mesmo nome de modelo em
+        # provedores ou configs de raciocínio diferentes são instâncias distintas.
+        key = (
+            provider,
+            base_url,
+            model,
+            temperature,
+            json.dumps(extra_body, sort_keys=True),
+        )
         if key not in Model._instances:
             Model._instances[key] = init_chat_model(
                 model=model,
@@ -113,7 +129,7 @@ class Model:
                 api_key=api_key,
                 temperature=temperature,
                 stream_usage=True,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                extra_body=extra_body,
             )
         return Model._instances[key]
 
@@ -125,6 +141,7 @@ class Model:
             api_key=cfg["api_key"],
             provider=cfg["provider"],
             temperature=temperature,
+            extra_body=cfg["extra_body"],
         )
 
     @staticmethod
