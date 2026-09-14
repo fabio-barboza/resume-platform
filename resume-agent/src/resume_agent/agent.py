@@ -42,7 +42,10 @@ MAX_TOOL_CALLS_PER_QUESTION = int(os.getenv("MAX_TOOL_CALLS_PER_QUESTION", "5"))
 # ficamos com o melhor trecho de cada candidato, então o custo em contexto é o
 # mesmo de antes e a diversidade é o dobro.
 CANDIDATES_PER_SEARCH = int(os.getenv("CANDIDATES_PER_SEARCH", "8"))
-_OVERFETCH = 4
+# A folga acompanha `MAX_RESUME_PAGES`: cada página rende 1 ou 2 chunks, então
+# um currículo de 4 páginas cabe inteiro nos 32 do overfetch antigo e volta a
+# derrubar a diversidade que o corte por candidato existe para garantir.
+_OVERFETCH = 6
 
 
 def _format_identity(name: str | None, email: str | None, phone: str | None) -> str:

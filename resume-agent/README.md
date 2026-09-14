@@ -220,7 +220,7 @@ indisponibilidade, não segurança — e o risco aqui é de conteúdo, não de
 execução. O `SYSTEM_PROMPT` cobre o caso complementar, da pergunta que passa
 mas cuja justificativa não pode se apoiar em atributo protegido.
 
-**3. Teto de páginas por currículo** (`MAX_RESUME_PAGES`, 3 por padrão).
+**3. Teto de páginas por currículo** (`MAX_RESUME_PAGES`, 4 por padrão).
 Guardrail de custo, checado antes de tudo: cada página vira chunk, cada chunk
 vira embedding, e as primeiras ainda alimentam uma chamada de LLM na extração.
 Sem teto, um PDF de 300 páginas passa direto e a conta é do dono da base, não

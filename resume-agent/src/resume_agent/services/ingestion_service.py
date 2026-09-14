@@ -50,7 +50,7 @@ STATUS_PENDING_REVIEW = "pending_review"
 # Teto de páginas por currículo: cada página vira chunk e embedding, e as
 # primeiras ainda alimentam uma chamada de LLM. Sem teto, um PDF de 300 páginas
 # passa direto e a conta é do dono da base.
-MAX_RESUME_PAGES = int(os.getenv("MAX_RESUME_PAGES", "3"))
+MAX_RESUME_PAGES = int(os.getenv("MAX_RESUME_PAGES", "4"))
 
 
 @dataclass
