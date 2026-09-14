@@ -16,7 +16,15 @@ const DEFAULT_TOOL_LABEL = 'Consultando a base…'
 
 // Casa `/candidates/<id ou email>/resume`, absoluto ou relativo, como o
 // agente devolve no markdown (ver `find_candidate_by_name` em agent.py).
-const RESUME_LINK_RE = /(https?:\/\/[^\s)]+)?\/candidates\/([^/\s)]+)\/resume/g
+//
+// O grupo do host proíbe `/` e `]` de propósito: ele é só esquema + host, o
+// caminho vem do resto do padrão. Sem essa restrição ele era guloso e
+// atravessava o `](` de um link markdown cujo texto é a própria URL
+// (`[http://host/candidates/12/resume](http://host/candidates/12/resume)`),
+// capturando como "base" a primeira URL inteira mais o começo da segunda. O
+// botão então apontava para `http://host/candidates/12/resume](http://host` +
+// `/candidates/12/resume` e o usuário levava 404 num candidato que existe.
+const RESUME_LINK_RE = /(https?:\/\/[^\s)\]/]+)?\/candidates\/([^/\s)\]]+)\/resume/g
 
 marked.setOptions({ breaks: true })
 
