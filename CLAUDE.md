@@ -99,7 +99,7 @@ toda linha ao carregar o arquivo, e sem eles o eval de gráfico quebra (3 execu�
 |---|---|---|
 | Injeção de prompt (regex, determinística) | `ingestion_service._prepare` | `422` no upload |
 | Critério protegido (classificador LLM, **falha aberto**) | middleware `before_agent` | encerra o turno, zero tool calls |
-| `MAX_RESUME_PAGES` (3) | `_prepare` | `422` |
+| `MAX_RESUME_PAGES` (4) | `_prepare` | `422` |
 | `MAX_TOOL_CALLS_PER_QUESTION` (5) | `ToolCallLimitMiddleware`, `exit_behavior="continue"` | bloqueia a busca excedente, responde com o que tem |
 | Grounding (regex + contagem, determinístico) | middleware `after_model` | descarta a resposta e manda o modelo buscar; na segunda falha do turno, desiste |
 | Link de PDF falso (regex) | mesmo `after_model` | nome de arquivo anunciado como link manda buscar de novo, mesmo tendo havido busca |
