@@ -6,3 +6,7 @@ start.bat   linguist-detectable=false
 
 # Template do Alembic (Mako), gerado pela ferramenta
 resume-agent/migrations/script.py.mako   linguist-generated=true
+
+# Selo do GitHub mostra uma linguagem só (a de mais bytes). Os testes do Java
+# ficam fora da contagem para o Python, versão original, continuar principal.
+resume-ai/src/test/**   linguist-detectable=false
