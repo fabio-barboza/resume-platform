@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.guardrail;
+package dev.resumeplatform.resumeai.core.guardrail;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dev.resumeplatform.resumeai.core.domain.text.TextFolding;
+import dev.resumeplatform.resumeai.core.support.text.TextFolding;
 
 public final class PersonMentions {
     private static final int FLAGS = Pattern.UNICODE_CHARACTER_CLASS;

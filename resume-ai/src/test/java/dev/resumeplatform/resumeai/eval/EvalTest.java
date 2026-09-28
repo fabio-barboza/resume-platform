@@ -18,9 +18,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import dev.resumeplatform.resumeai.core.domain.chat.AgentListener;
 import dev.resumeplatform.resumeai.core.domain.chat.TurnResult;
-import dev.resumeplatform.resumeai.core.domain.guardrail.PersonMentions;
-import dev.resumeplatform.resumeai.core.domain.text.TextFolding;
 import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
+import dev.resumeplatform.resumeai.core.guardrail.PersonMentions;
+import dev.resumeplatform.resumeai.core.support.text.TextFolding;
 import dev.resumeplatform.resumeai.core.usecase.chat.AskAgentUseCase;
 import dev.resumeplatform.resumeai.core.usecase.resume.IngestResumeUseCase;
 import dev.resumeplatform.resumeai.support.DatabaseTest;

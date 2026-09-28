@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.service;
+package dev.resumeplatform.resumeai.core.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -12,8 +12,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import dev.resumeplatform.resumeai.core.domain.CandidateIdentity;
 import dev.resumeplatform.resumeai.core.domain.exception.InvalidDocumentException;
-import dev.resumeplatform.resumeai.core.domain.settings.IngestionSettings;
-import dev.resumeplatform.resumeai.core.domain.text.PyRepr;
+import dev.resumeplatform.resumeai.core.settings.IngestionSettings;
+import dev.resumeplatform.resumeai.core.support.text.PyRepr;
 import dev.resumeplatform.resumeai.infra.gateway.PdfGatewayImpl;
 import dev.resumeplatform.resumeai.support.PdfFixtures;
 

@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 
 import dev.resumeplatform.resumeai.core.domain.CandidateChunk;
 import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
-import dev.resumeplatform.resumeai.core.domain.chunking.TextChunk;
 import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
+import dev.resumeplatform.resumeai.core.support.chunking.TextChunk;
 import dev.resumeplatform.resumeai.infra.repository.ChunkRepository;
 import dev.resumeplatform.resumeai.infra.repository.DocumentRepository;
 import dev.resumeplatform.resumeai.infra.repository.entity.ChunkEntity;

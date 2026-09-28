@@ -5,7 +5,7 @@ import java.util.Map;
 
 import dev.resumeplatform.resumeai.core.domain.CandidateChunk;
 import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
-import dev.resumeplatform.resumeai.core.domain.chunking.TextChunk;
+import dev.resumeplatform.resumeai.core.support.chunking.TextChunk;
 
 public interface ChunkGateway {
     long saveAll(long documentId, List<TextChunk> chunks, List<float[]> embeddings);

@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.text;
+package dev.resumeplatform.resumeai.core.support.text;
 
 public final class PyRepr {
     private PyRepr() {

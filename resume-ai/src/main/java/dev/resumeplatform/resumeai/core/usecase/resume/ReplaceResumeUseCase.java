@@ -7,16 +7,16 @@ import dev.resumeplatform.resumeai.core.domain.AnalyzedResume;
 import dev.resumeplatform.resumeai.core.domain.Candidate;
 import dev.resumeplatform.resumeai.core.domain.IngestionOutcome;
 import dev.resumeplatform.resumeai.core.domain.Resume;
-import dev.resumeplatform.resumeai.core.domain.chunking.FileHash;
 import dev.resumeplatform.resumeai.core.domain.exception.ConflictException;
 import dev.resumeplatform.resumeai.core.domain.exception.DuplicateFileException;
 import dev.resumeplatform.resumeai.core.domain.exception.NotFoundException;
-import dev.resumeplatform.resumeai.core.domain.service.CandidateResolution;
-import dev.resumeplatform.resumeai.core.domain.service.ResumePreparation;
 import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
 import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
 import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
 import dev.resumeplatform.resumeai.core.gateway.StorageGateway;
+import dev.resumeplatform.resumeai.core.service.CandidateResolution;
+import dev.resumeplatform.resumeai.core.service.ResumePreparation;
+import dev.resumeplatform.resumeai.core.support.chunking.FileHash;
 
 @Service
 public class ReplaceResumeUseCase {

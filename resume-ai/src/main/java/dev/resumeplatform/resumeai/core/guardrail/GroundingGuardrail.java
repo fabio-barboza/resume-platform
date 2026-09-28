@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.guardrail;
+package dev.resumeplatform.resumeai.core.guardrail;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.resumeplatform.resumeai.core.domain.chat.ChatMessage;
-import dev.resumeplatform.resumeai.core.domain.text.PythonJson;
+import dev.resumeplatform.resumeai.core.support.text.PythonJson;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;

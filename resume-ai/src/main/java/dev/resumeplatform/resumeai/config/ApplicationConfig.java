@@ -5,9 +5,9 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import dev.resumeplatform.resumeai.core.domain.settings.AgentSettings;
-import dev.resumeplatform.resumeai.core.domain.settings.IngestionSettings;
 import dev.resumeplatform.resumeai.core.agent.tools.ResumeTools;
+import dev.resumeplatform.resumeai.core.settings.AgentSettings;
+import dev.resumeplatform.resumeai.core.settings.IngestionSettings;
 
 @Configuration
 public class ApplicationConfig {

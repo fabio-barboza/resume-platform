@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.guardrail;
+package dev.resumeplatform.resumeai.core.guardrail;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dev.resumeplatform.resumeai.core.domain.text.TextFolding;
+import dev.resumeplatform.resumeai.core.support.text.TextFolding;
 
 public final class InjectionDetector {
     private static final int CONTEXT_WINDOW = 60;

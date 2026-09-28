@@ -14,12 +14,12 @@ import dev.resumeplatform.resumeai.core.domain.chat.ChatMessage;
 import dev.resumeplatform.resumeai.core.domain.chat.ToolCall;
 import dev.resumeplatform.resumeai.core.domain.chat.ToolResult;
 import dev.resumeplatform.resumeai.core.domain.chat.TurnResult;
-import dev.resumeplatform.resumeai.core.domain.guardrail.GroundingGuardrail;
-import dev.resumeplatform.resumeai.core.domain.guardrail.ProtectedCriterionGuardrail;
-import dev.resumeplatform.resumeai.core.domain.settings.AgentSettings;
 import dev.resumeplatform.resumeai.core.gateway.ChatHistoryGateway;
 import dev.resumeplatform.resumeai.core.gateway.ChatModelGateway;
 import dev.resumeplatform.resumeai.core.gateway.TracingGateway;
+import dev.resumeplatform.resumeai.core.guardrail.GroundingGuardrail;
+import dev.resumeplatform.resumeai.core.guardrail.ProtectedCriterionGuardrail;
+import dev.resumeplatform.resumeai.core.settings.AgentSettings;
 
 /**
  * O agente: carrega o histórico da sessão, roda o turno (critério protegido → modelo → ferramentas com teto de

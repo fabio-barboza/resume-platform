@@ -20,12 +20,12 @@ import dev.resumeplatform.resumeai.core.domain.CandidateWithResume;
 import dev.resumeplatform.resumeai.core.domain.InventoryEntry;
 import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
 import dev.resumeplatform.resumeai.core.domain.ResumeStatus;
-import dev.resumeplatform.resumeai.core.domain.settings.AgentSettings;
-import dev.resumeplatform.resumeai.core.domain.text.PyRepr;
 import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
 import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
 import dev.resumeplatform.resumeai.core.gateway.EmbeddingGateway;
 import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
+import dev.resumeplatform.resumeai.core.settings.AgentSettings;
+import dev.resumeplatform.resumeai.core.support.text.PyRepr;
 
 /**
  * As 4 ferramentas do agente, executadas pelo laço do {@code AskAgentUseCase}: cada tool consulta os gateways

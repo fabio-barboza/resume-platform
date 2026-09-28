@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.settings;
+package dev.resumeplatform.resumeai.core.settings;
 
 public record IngestionSettings(int extractionPages, int maxResumePages) {
 }

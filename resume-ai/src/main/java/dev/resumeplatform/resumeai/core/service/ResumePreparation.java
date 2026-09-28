@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.service;
+package dev.resumeplatform.resumeai.core.service;
 
 import java.io.IOException;
 import java.util.List;
@@ -10,15 +10,15 @@ import org.springframework.stereotype.Service;
 import dev.resumeplatform.resumeai.core.domain.AnalyzedResume;
 import dev.resumeplatform.resumeai.core.domain.CandidateIdentity;
 import dev.resumeplatform.resumeai.core.domain.PreparedResume;
-import dev.resumeplatform.resumeai.core.domain.chunking.ResumeChunker;
-import dev.resumeplatform.resumeai.core.domain.chunking.TextChunk;
 import dev.resumeplatform.resumeai.core.domain.exception.InvalidDocumentException;
-import dev.resumeplatform.resumeai.core.domain.guardrail.InjectionDetector;
-import dev.resumeplatform.resumeai.core.domain.settings.IngestionSettings;
-import dev.resumeplatform.resumeai.core.domain.text.PyRepr;
 import dev.resumeplatform.resumeai.core.gateway.ContactExtractionGateway;
 import dev.resumeplatform.resumeai.core.gateway.EmbeddingGateway;
 import dev.resumeplatform.resumeai.core.gateway.PdfGateway;
+import dev.resumeplatform.resumeai.core.guardrail.InjectionDetector;
+import dev.resumeplatform.resumeai.core.settings.IngestionSettings;
+import dev.resumeplatform.resumeai.core.support.chunking.ResumeChunker;
+import dev.resumeplatform.resumeai.core.support.chunking.TextChunk;
+import dev.resumeplatform.resumeai.core.support.text.PyRepr;
 
 /** Lê, valida, extrai o contato e gera os embeddings: o trabalho comum ao POST e ao PUT, todo antes da transação. */
 @Service

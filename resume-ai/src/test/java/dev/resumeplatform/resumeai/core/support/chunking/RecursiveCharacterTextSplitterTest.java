@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.chunking;
+package dev.resumeplatform.resumeai.core.support.chunking;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

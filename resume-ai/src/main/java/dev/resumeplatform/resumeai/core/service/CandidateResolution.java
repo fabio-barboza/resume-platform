@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.service;
+package dev.resumeplatform.resumeai.core.service;
 
 import org.springframework.stereotype.Service;
 

@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.guardrail;
+package dev.resumeplatform.resumeai.core.guardrail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

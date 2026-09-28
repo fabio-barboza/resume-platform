@@ -197,7 +197,7 @@ frames SSE (`event: <tipo>\ndata: <json>\n\n`) é protocolo, então mora no
 Triagem de currículo tem dois problemas que prompt não resolve: o texto que
 entra na base vem de quem quer ser contratado, e a resposta que sai é decisão
 sobre a vida profissional de alguém. Regra no system prompt é pedido educado ao
-modelo — os guardrails abaixo são código, e ficam em `core/domain/guardrail/`.
+modelo — os guardrails abaixo são código, e ficam em `core/guardrail/`.
 
 | Guardrail | Onde roda | O que faz |
 |---|---|---|
@@ -595,14 +595,17 @@ abstração própria custaria schema JSON à mão sem mudar comportamento.
 ```
 src/main/java/dev/resumeplatform/resumeai/
   core/
-    domain/          records do negócio, chat/ (conversa do agente em tipos próprios), exception/,
-                     guardrail/ (InjectionDetector, ProtectedCriterionGuardrail, GroundingGuardrail,
-                     PersonMentions), chunking/, text/, settings/,
-                     service/ (etapas que mais de um use case compartilha)
+    domain/          só o modelo: records do negócio, ResumeStatus, chat/ (conversa do agente em
+                     tipos próprios), exception/
     usecase/         um caso de uso por classe (@Service), separados por domínio:
                      resume/, candidate/, chat/, health/ — use case nunca injeta outro
     gateway/         interfaces para tudo que é externo, uma por agregado
     agent/tools/     as 4 tools do agente (@Tool), executadas pelo AskAgentUseCase
+    settings/        valores de configuração que o core recebe (AgentSettings, IngestionSettings)
+    guardrail/       InjectionDetector, ProtectedCriterionGuardrail, GroundingGuardrail, PersonMentions
+    service/         etapas que mais de um use case compartilha (ResumePreparation, CandidateResolution)
+    support/         chunking/ (splitter, hash de arquivo) e text/ (formatação compatível com o Python,
+                     remoção de acento)
   infra/
     gateway/         *GatewayImpl: implementam core/gateway com Spring Data, Spring AI, S3, PDFBox
     repository/      Spring Data + fragments Criteria, entity/ (*Entity), projection/, mapper/
@@ -632,7 +635,7 @@ callbacks delas chegam ao gateway do modelo por um bean do `config/`, para que
 `infra` não dependa do `core/agent` por import.
 
 O que o POST e o PUT de currículo compartilham (ler, validar, extrair contato e
-gerar embeddings; resolver o candidato) está em `core/domain/service/`
+gerar embeddings; resolver o candidato) está em `core/service/`
 (`ResumePreparation`, `CandidateResolution`), não num use case chamando outro.
 
 Transação: `@Transactional` nos use cases simples; `TransactionTemplate` onde

@@ -216,7 +216,8 @@ não no router.
 ### resume-ai (versão Java)
 
 Mesma API, mesmo banco, mesmo bucket; detalhes em `resume-ai/README.md`. Clean Architecture em três
-pacotes: `core/` (`domain/` com records, exceções, guardrails, chunking e `service/` para etapas compartilhadas;
+pacotes: `core/` (`domain/` só com o modelo — records, exceções e `chat/`; `settings/` com os valores de config que o core recebe; `guardrail/`; `service/` para etapas
+compartilhadas entre use cases; `support/` com `chunking/` e `text/`;
 `usecase/` com um caso de uso por classe `@Service`, separado por domínio, e nenhum use case injeta outro; `gateway/` com uma interface por agregado para tudo que é
 externo; `agent/tools/` com as 4 tools, que o laço do `AskAgentUseCase` executa — o `core` não importa JPA
 nem Spring AI, exceto `@Tool`/`@ToolParam` e o `ToolCallResultConverter` nas tools, exceção assumida de

@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.core.domain.text;
+package dev.resumeplatform.resumeai.core.support.text;
 
 import java.text.Normalizer;
 
