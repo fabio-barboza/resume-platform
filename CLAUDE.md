@@ -236,8 +236,10 @@ grounding na mesma ordem do Python.
   request malformado.
 - **Schema compartilhado**: coluna nova em `candidates`/`documents`/`chunks` exige migração Alembic
   **e** Flyway. As migrações Flyway são idempotentes (`IF NOT EXISTS`, mesmos nomes de constraint do
-  SQLAlchemy, `baseline-version: 0`); a `V2` grava `alembic_version='0002'` quando é o Java quem cria
-  o schema, porque o Alembic não é idempotente. `chat_messages` é só do Java; `checkpoint_*` só do
+  SQLAlchemy, `baseline-version: 0`); as Alembic também (`if_not_exists=True` em tabela e índice), e
+  revisão nova segue a mesma regra — o Java pode ter criado aquilo antes. A `V2` ainda grava
+  `alembic_version='0002'` quando é o Java quem cria o schema (não edite: muda o checksum do Flyway),
+  mas é atalho, não a garantia. `chat_messages` é só do Java; `checkpoint_*` só do
   Python — o histórico de conversa **não** é compartilhado entre as versões.
 - `contract-tests/` é a verificação disso: mudou rota, JSON, status ou SSE, rode `npm test` contra as
   **duas** versões (`--python` e `--java`, ou uma delas em outra porta com `BASE_URL`).

@@ -18,6 +18,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # `if_not_exists` em tudo: o resume-ai (Flyway) cria o mesmo schema, e se
+    # ele subiu primeiro as tabelas já existem. A V2 dele grava
+    # `alembic_version`, mas não se apoie nisso — toda revisão tem que poder
+    # rodar por cima do que o Java já criou.
     # SQL cru: criar extensão é DDL que o SQLAlchemy não modela, e precisa
     # rodar antes das tabelas porque o tipo `vector` vem dela.
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
@@ -36,6 +40,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
+        if_not_exists=True,
     )
 
     op.create_table(
@@ -57,8 +62,11 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("file_hash"),
+        if_not_exists=True,
     )
-    op.create_index("documents_candidate_id_idx", "documents", ["candidate_id"])
+    op.create_index(
+        "documents_candidate_id_idx", "documents", ["candidate_id"], if_not_exists=True
+    )
 
     op.create_table(
         "chunks",
@@ -75,6 +83,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("document_id", "page", "chunk_index"),
+        if_not_exists=True,
     )
 
     # HNSW com distância de cosseno: é a métrica que a busca do retriever usa
@@ -85,6 +94,7 @@ def upgrade() -> None:
         ["embedding"],
         postgresql_using="hnsw",
         postgresql_ops={"embedding": "vector_cosine_ops"},
+        if_not_exists=True,
     )
 
 
