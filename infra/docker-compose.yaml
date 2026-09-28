@@ -1,3 +1,12 @@
+# Infra compartilhada pelos dois backends (resume-agent e resume-ai): mesmo banco, mesmo
+# bucket. O nome do projeto fica fixo em "resume-agent" de propósito: é dele que vêm os nomes
+# dos volumes (resume-agent_pgvector_data, resume-agent_minio_data) criados quando este arquivo
+# morava em resume-agent/. Mudar o nome troca os volumes e a base parece vazia.
+#
+# As variáveis POSTGRES_* e MINIO_ROOT_* vêm do ambiente (o start.sh exporta o .env do backend
+# escolhido); sem elas, valem os defaults abaixo, que são os do .env.example.
+name: resume-agent
+
 services:
   pgvector:
     image: pgvector/pgvector:pg18

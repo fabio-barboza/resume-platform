@@ -3,9 +3,13 @@
 PDFs fictícios, para quem for testar não precisar sair atrás de currículo.
 Nenhum dado real de candidato.
 
-**Nada aqui é lido pela aplicação.** O código não conhece esta pasta: é só um
-material de apoio do repositório. A base se popula por upload na API, e os
-arquivos recebidos vão para `data/resumes/`.
+**Nada aqui é lido pela aplicação.** Nenhum dos dois backends (resume-agent e
+resume-ai) conhece esta pasta em runtime: a base se popula por upload na API, e
+os arquivos recebidos vão para o bucket S3 (MinIO em dev). Quem lê daqui são o
+`--seed` do `start.sh` e as suítes de teste das duas versões — por isso a pasta
+fica na raiz do repositório, e não dentro de um dos projetos.
+
+Os comandos abaixo rodam da raiz do repositório.
 
 ## Como usar
 

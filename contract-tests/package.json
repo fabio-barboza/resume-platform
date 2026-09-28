@@ -1,0 +1,13 @@
+{
+  "name": "resume-platform-contract-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Contrato HTTP que o resume-agent (Python) e o resume-ai (Java) precisam cumprir igual",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-reporter=spec tests/*.test.js"
+  }
+}

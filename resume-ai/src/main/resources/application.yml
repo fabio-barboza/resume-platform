@@ -1,0 +1,114 @@
+spring:
+  application:
+    name: resume-ai
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    async:
+      request-timeout: 15m
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 200MB
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:resume_agent}
+    username: ${POSTGRES_USER:resume_agent}
+    password: ${POSTGRES_PASSWORD:resume_agent}
+    hikari:
+      minimum-idle: ${DB_POOL_MIN_SIZE:1}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
+  ai:
+    model:
+      chat: none
+      embedding: none
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
+    retry:
+      max-attempts: 2
+
+server:
+  port: ${API_PORT:8000}
+  address: ${API_HOST:127.0.0.1}
+
+springdoc:
+  swagger-ui:
+    path: /docs
+  api-docs:
+    path: /openapi.json
+
+management:
+  tracing:
+    export:
+      enabled: ${LANGFUSE_ENABLED:false}
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${LANGFUSE_BASE_URL:http://localhost:8060}/api/public/otel/v1/traces
+  logging:
+    export:
+      otlp:
+        enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false
+
+logging:
+  level:
+    root: info
+    dev.resumeplatform.resumeai: info
+    org.springframework.boot.web.embedded: info
+    org.apache.pdfbox: error
+    org.apache.fontbox: error
+
+resume:
+  api:
+    host: ${API_HOST:127.0.0.1}
+    port: ${API_PORT:8000}
+  ingestion:
+    extraction-pages: ${EXTRACTION_PAGES:2}
+    max-resume-pages: ${MAX_RESUME_PAGES:4}
+  agent:
+    max-tool-calls-per-question: ${MAX_TOOL_CALLS_PER_QUESTION:5}
+    candidates-per-search: ${CANDIDATES_PER_SEARCH:8}
+  main:
+    name: ${MAIN_MODEL:qwen3.6:35B}
+    base-url: ${MAIN_MODEL_BASE_URL:${MODEL_BASE_URL:http://localhost:8200/v1}}
+    api-key: ${MAIN_MODEL_API_KEY:${MODEL_API_KEY:not-needed}}
+    provider: ${MAIN_MODEL_PROVIDER:${MODEL_PROVIDER:openai}}
+    extra-body: ${MAIN_MODEL_EXTRA_BODY:{}}
+  worker:
+    name: ${WORKER_MODEL:qwen3.6:35B}
+    base-url: ${WORKER_MODEL_BASE_URL:${MODEL_BASE_URL:http://localhost:8200/v1}}
+    api-key: ${WORKER_MODEL_API_KEY:${MODEL_API_KEY:not-needed}}
+    provider: ${WORKER_MODEL_PROVIDER:${MODEL_PROVIDER:openai}}
+    extra-body: ${WORKER_MODEL_EXTRA_BODY:{}}
+  embedding:
+    name: ${EMBEDDING_MODEL:qwen3-embedding-0.6b}
+    base-url: ${EMBEDDING_MODEL_BASE_URL:http://localhost:8892/v1}
+    api-key: ${EMBEDDING_MODEL_API_KEY:${MODEL_API_KEY:not-needed}}
+    dim: ${EMBEDDING_DIM:1024}
+  storage:
+    access-key-id: ${AWS_ACCESS_KEY_ID:minio}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:minio123}
+    region: ${AWS_REGION:us-east-1}
+    bucket: ${S3_BUCKET:resume-agent-bucket}
+    endpoint-url: ${S3_ENDPOINT_URL:}
