@@ -108,7 +108,7 @@ sem tocar em código. Guardar arquivo em disco local prenderia a aplicação a u
 | Embeddings | **Qwen3-Embedding-0.6B** | 1024 dimensões |
 
 **Nada aqui está preso a esse modelo.** A factory de modelos
-(`infra/client/ModelConfig`) lê tudo do `.env` — modelo, `base_url`, chave e
+(`config/ModelConfig`) lê tudo do `.env` — modelo, `base_url`, chave e
 corpo extra da requisição — e há papéis separados (`MAIN_*`, `WORKER_*` e
 `EMBEDDING_*`) que podem apontar para provedores diferentes. Trocar por GPT,
 Claude, Gemini ou qualquer outro é mudar variável de ambiente, não código.
@@ -586,11 +586,13 @@ Detalhes da extração:
 
 Clean Architecture com as dependências apontando para o `core`: `entrypoint` e
 `infra` dependem dele, ele não depende de nenhum dos dois. O `core` não importa
-JPA, Spring AI nem Micrometer — só `@Service` e as anotações/templates de
-transação do Spring. A exceção são as tools do agente (`core/agent/tools/`), que
-usam `@Tool`/`@ToolParam` do Spring AI: quem as executa é o laço do
-`AskAgentUseCase`, então moram no `core`, e trocar as anotações por uma
-abstração própria custaria schema JSON à mão sem mudar comportamento.
+JPA nem Micrometer: do Spring, só os estereótipos (`@Service`, `@Component`) e
+as anotações/templates de transação; fora do Spring, o Jackson (`JsonNode`, nos
+guardrails e em `support/text`). A exceção de Spring AI são as tools do agente
+(`core/agent/tools/`), com `@Tool`/`@ToolParam` e o `ToolCallResultConverter`:
+quem as executa é o laço do `AskAgentUseCase`, então moram no `core`, e trocar
+as anotações por uma abstração própria custaria schema JSON à mão sem mudar
+comportamento.
 
 ```
 src/main/java/dev/resumeplatform/resumeai/
@@ -608,12 +610,22 @@ src/main/java/dev/resumeplatform/resumeai/
                      remoção de acento)
   infra/
     gateway/         *GatewayImpl: implementam core/gateway com Spring Data, Spring AI, S3, PDFBox
-    repository/      Spring Data + fragments Criteria, entity/ (*Entity), projection/, mapper/
-    client/          factory dos modelos (papéis MAIN/WORKER/EMBEDDING) e cliente S3
+    repository/      interfaces Spring Data; query dinâmica (N palavras, N termos) em classe
+                     @Repository sem interface (CandidateSearchRepository, ChunkCountRepository)
+    entity/          *Entity do JPA
+    dto/             *Dto: resultado de query com `select new`, sem carregar a entidade inteira
+    mapper/          entity/dto → domínio e mensagens do Spring AI ↔ chat do domínio
+    support/         helpers de SQL do Postgres: LikePatterns (escape do LIKE), UniqueViolation (23505)
+    client/          cliente S3
   entrypoint/
-    controller/      controllers finos + request/ response/ mapper/ + sse/ (ChatStreamer);
-                     ApiExceptionHandler é o único lugar com status HTTP
-  config/            propriedades tipadas, leitor de .env e o wiring
+    controller/      controllers finos
+    exception/       ApiExceptionHandler, o único que traduz erro em status HTTP
+    request/         DTOs de entrada
+    response/        DTOs de saída
+    mapper/          domínio → DTO de resposta
+    sse/             streaming do chat (ChatStreamer, frame SSE)
+  config/            propriedades tipadas, leitor de .env e o wiring, inclusive a factory dos
+                     modelos (ModelConfig, papéis MAIN/WORKER/EMBEDDING)
 src/main/resources/
   application.yml
   db/migration/      migrações Flyway
@@ -623,6 +635,36 @@ src/test/java/       testes e evals (profile eval)
 
 Regra de negócio nova vai em `core/usecase/`, nunca no controller nem no
 gateway.
+
+### Convenções de pacote
+
+As regras que a árvore acima segue, independentes deste projeto:
+
+- **Pasta com o nome do que contém.** Nada de subpasta "de apoio" dentro de outra:
+  `request/`, `response/` e `mapper/` são irmãs de `controller/`; `entity/`,
+  `dto/` e `mapper/` são irmãs de `repository/`.
+- **`domain/` é só o modelo** — records, enums, exceções. Regra que depende de
+  gateway não é domínio: vai para `service/` (etapa compartilhada) ou `guardrail/`.
+- **Utilitário técnico vai em `support/`**, no core e no infra (chunking, texto,
+  helpers de SQL). **Config injetada no core** vai em `core/settings/`.
+- **Quem chama quem:** controller → use case → gateway. Use case nunca chama
+  outro use case; tool do agente também não — ela é o "use case do agente" e
+  chama gateway. Etapa compartilhada vira classe em `core/service/`.
+- **Nada de interface só por padrão.** As que existem têm motivo: os gateways
+  (porta do core para fora), os repositórios Spring Data (o Spring gera a
+  implementação) e tipos do modelo (`ChatMessage` selado, o callback
+  `AgentListener`). Use case e service não têm interface. Query dinâmica demais
+  para `@Query` vira classe `@Repository` sem interface — nada de fragment
+  `*RepositoryCustom`.
+- **Sufixos:** `*UseCase`, `*Gateway`/`*GatewayImpl`, `*Entity`, `*Dto`
+  (resultado de query), `*Request`/`*Response` (HTTP), `*Mapper`. Classe
+  auxiliar só leva `Gateway` no nome se implementa uma interface de `core/gateway`.
+- **Todo `@Configuration` fica em `config/`**, que é quem liga as camadas.
+- **Erro vira status HTTP só em `entrypoint/exception/`** (`ApiExceptionHandler`);
+  o controller só declara o status de sucesso (`@ResponseStatus(CREATED)`).
+- **Testes espelham o pacote do que testam.**
+- **Exceção à regra é aceitável quando evitá-la custa abstração sem ganho** —
+  desde que documentada aqui (como o Spring AI nas tools).
 
 O agente é o `AskAgentUseCase`: carrega o histórico, roda o laço e grava o
 turno. O `ChatModelGateway` é a única porta do laço para o modelo: chama o LLM

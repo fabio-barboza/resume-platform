@@ -7,9 +7,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import dev.resumeplatform.resumeai.infra.repository.entity.CandidateEntity;
+import dev.resumeplatform.resumeai.infra.entity.CandidateEntity;
 
-public interface CandidateRepository extends JpaRepository<CandidateEntity, Long>, CandidateRepositoryCustom {
+public interface CandidateRepository extends JpaRepository<CandidateEntity, Long> {
     Optional<CandidateEntity> findFirstByEmailIgnoreCase(String email);
 
     @Modifying(flushAutomatically = true)

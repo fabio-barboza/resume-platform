@@ -27,7 +27,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import dev.resumeplatform.resumeai.infra.repository.entity.ChunkEntity;
+import dev.resumeplatform.resumeai.infra.entity.ChunkEntity;
 import dev.resumeplatform.resumeai.support.DatabaseTest;
 import dev.resumeplatform.resumeai.support.PdfFixtures;
 import tools.jackson.databind.JsonNode;

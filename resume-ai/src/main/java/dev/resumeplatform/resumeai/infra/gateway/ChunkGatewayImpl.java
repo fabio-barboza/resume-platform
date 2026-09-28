@@ -11,19 +11,22 @@ import dev.resumeplatform.resumeai.core.domain.CandidateChunk;
 import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
 import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
 import dev.resumeplatform.resumeai.core.support.chunking.TextChunk;
+import dev.resumeplatform.resumeai.infra.repository.ChunkCountRepository;
 import dev.resumeplatform.resumeai.infra.repository.ChunkRepository;
 import dev.resumeplatform.resumeai.infra.repository.DocumentRepository;
-import dev.resumeplatform.resumeai.infra.repository.entity.ChunkEntity;
-import dev.resumeplatform.resumeai.infra.repository.entity.DocumentEntity;
-import dev.resumeplatform.resumeai.infra.repository.mapper.ResumeEntityMapper;
+import dev.resumeplatform.resumeai.infra.entity.ChunkEntity;
+import dev.resumeplatform.resumeai.infra.entity.DocumentEntity;
+import dev.resumeplatform.resumeai.infra.mapper.ResumeEntityMapper;
 
 @Component
 public class ChunkGatewayImpl implements ChunkGateway {
     private final ChunkRepository chunks;
+    private final ChunkCountRepository counts;
     private final DocumentRepository documents;
 
-    public ChunkGatewayImpl(ChunkRepository chunks, DocumentRepository documents) {
+    public ChunkGatewayImpl(ChunkRepository chunks, ChunkCountRepository counts, DocumentRepository documents) {
         this.chunks = chunks;
+        this.counts = counts;
         this.documents = documents;
     }
 
@@ -58,6 +61,6 @@ public class ChunkGatewayImpl implements ChunkGateway {
 
     @Override
     public Map<String, Long> countCandidatesByTerms(List<String> terms) {
-        return chunks.countCandidatesByTerms(terms);
+        return counts.countCandidatesByTerms(terms);
     }
 }

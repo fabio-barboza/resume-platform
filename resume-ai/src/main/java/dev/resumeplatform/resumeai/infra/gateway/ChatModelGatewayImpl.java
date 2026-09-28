@@ -30,7 +30,7 @@ import dev.resumeplatform.resumeai.config.ResumeAiProperties;
 import dev.resumeplatform.resumeai.core.domain.chat.ChatMessage;
 import dev.resumeplatform.resumeai.core.domain.chat.ToolCall;
 import dev.resumeplatform.resumeai.core.gateway.ChatModelGateway;
-import dev.resumeplatform.resumeai.infra.gateway.mapper.SpringAiMessageMapper;
+import dev.resumeplatform.resumeai.infra.mapper.SpringAiMessageMapper;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;

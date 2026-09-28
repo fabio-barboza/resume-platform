@@ -12,11 +12,11 @@ import dev.resumeplatform.resumeai.core.domain.ResumeStatus;
 import dev.resumeplatform.resumeai.core.domain.StoredFile;
 import dev.resumeplatform.resumeai.core.domain.exception.DuplicateFileException;
 import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
+import dev.resumeplatform.resumeai.infra.entity.DocumentEntity;
+import dev.resumeplatform.resumeai.infra.mapper.ResumeEntityMapper;
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
 import dev.resumeplatform.resumeai.infra.repository.DocumentRepository;
-import dev.resumeplatform.resumeai.infra.repository.UniqueViolation;
-import dev.resumeplatform.resumeai.infra.repository.entity.DocumentEntity;
-import dev.resumeplatform.resumeai.infra.repository.mapper.ResumeEntityMapper;
+import dev.resumeplatform.resumeai.infra.support.UniqueViolation;
 
 @Component
 public class ResumeGatewayImpl implements ResumeGateway {

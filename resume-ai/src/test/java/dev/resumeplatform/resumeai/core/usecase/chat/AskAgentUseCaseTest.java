@@ -125,7 +125,7 @@ class AskAgentUseCaseTest {
     @Test
     void theSecondAttemptCallsTheTool() {
         var model = new ScriptedChatModel(
-                new AssistantMessage(GroundingGuardrailTestTexts.HALLUCINATED_ANSWER),
+                new AssistantMessage(HallucinatedAnswers.HALLUCINATED_ANSWER),
                 ScriptedChatModel.toolCall("1", "find_in_resumes", "{\"question\": \"ia\"}"),
                 new AssistantMessage("**Larissa Moura** é engenheira de ML."));
 
@@ -142,8 +142,8 @@ class AskAgentUseCaseTest {
 
     @Test
     void secondFailureInTheSameTurnGivesUp() {
-        var model = new ScriptedChatModel(new AssistantMessage(GroundingGuardrailTestTexts.HALLUCINATED_ANSWER),
-                new AssistantMessage(GroundingGuardrailTestTexts.HALLUCINATED_ANSWER));
+        var model = new ScriptedChatModel(new AssistantMessage(HallucinatedAnswers.HALLUCINATED_ANSWER),
+                new AssistantMessage(HallucinatedAnswers.HALLUCINATED_ANSWER));
 
         TurnResult result = agent(model, CriterionTriage.allowed()).execute("s", "Melhor candidato para IA?", recorder);
 
@@ -202,7 +202,7 @@ class AskAgentUseCaseTest {
                 new ChatMessage.Assistant("", List.of(new ToolCall("0", "find_in_resumes", "{}"))),
                 new ChatMessage.ToolResults(List.of(new ToolResult("0", "find_in_resumes", "..."))),
                 new ChatMessage.Assistant("Encontrei Amanda Rocha."));
-        var model = new ScriptedChatModel(new AssistantMessage(GroundingGuardrailTestTexts.RATIONALIZED_ANSWER),
+        var model = new ScriptedChatModel(new AssistantMessage(HallucinatedAnswers.RATIONALIZED_ANSWER),
                 ScriptedChatModel.toolCall("1", "find_in_resumes", "{\"question\": \"fabio\"}"),
                 new AssistantMessage("**Larissa Moura** apareceu na busca."));
 

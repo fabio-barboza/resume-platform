@@ -215,19 +215,27 @@ não no router.
 
 ### resume-ai (versão Java)
 
-Mesma API, mesmo banco, mesmo bucket; detalhes em `resume-ai/README.md`. Clean Architecture em três
-pacotes: `core/` (`domain/` só com o modelo — records, exceções e `chat/`; `settings/` com os valores de config que o core recebe; `guardrail/`; `service/` para etapas
-compartilhadas entre use cases; `support/` com `chunking/` e `text/`;
-`usecase/` com um caso de uso por classe `@Service`, separado por domínio, e nenhum use case injeta outro; `gateway/` com uma interface por agregado para tudo que é
-externo; `agent/tools/` com as 4 tools, que o laço do `AskAgentUseCase` executa — o `core` não importa JPA
-nem Spring AI, exceto `@Tool`/`@ToolParam` e o `ToolCallResultConverter` nas tools, exceção assumida de
-propósito: abstrair isso exigiria schema JSON à mão e adaptador a mais para o mesmo comportamento), `infra/` (`gateway/*GatewayImpl`, `repository/` com
-Spring Data, `entity/*Entity`, projeções e fragments Criteria, `unaccent` e `cosine_distance` do
-hibernate-vector; `client/` com os modelos e o S3) e `entrypoint/` (`controller/` com `request/`,
-`response/`, `mapper/` e o `ApiExceptionHandler`, único com status HTTP). Regra de negócio nova vai em `core/usecase/`, nunca no
-controller nem no gateway. O laço de tool calling é próprio
-(`AskAgentUseCase`), não advisor do `ChatClient`, para aplicar critério protegido → teto de buscas →
-grounding na mesma ordem do Python.
+Mesma API, mesmo banco, mesmo bucket; detalhes em `resume-ai/README.md`, que tem a árvore completa e a
+seção **Convenções de pacote** (as regras abaixo, em forma portátil). Clean Architecture em quatro raízes:
+
+- `core/` — `domain/` (só o modelo: records, `chat/`, `exception/`), `usecase/` (um caso de uso por classe
+  `@Service`, separado por domínio), `gateway/` (uma interface por agregado para tudo que é externo),
+  `agent/tools/` (as 4 tools), `service/` (etapa compartilhada entre use cases), `guardrail/`, `settings/`
+  (config injetada no core), `support/` (`chunking/`, `text/`).
+- `infra/` — `gateway/*GatewayImpl`, `repository/` (Spring Data, `unaccent` e `cosine_distance` do
+  hibernate-vector; query dinâmica demais para `@Query` vira classe `@Repository` sem interface), `entity/`,
+  `dto/*Dto` (resultado de query), `mapper/`, `support/` (helpers de SQL), `client/` (S3).
+- `entrypoint/` — `controller/`, `exception/` (`ApiExceptionHandler`, único que traduz erro em status HTTP), `request/`,
+  `response/`, `mapper/`, `sse/`.
+- `config/` — todo `@Configuration`, inclusive o `ModelConfig` (factory dos modelos).
+
+Controller → use case → gateway. **Nenhum use case chama outro, e tool também não** — a tool é o "use
+case do agente" e chama gateway; etapa compartilhada vira classe em `core/service/`. Regra de negócio nova
+vai em `core/usecase/`, nunca no controller nem no gateway. O `core` não importa JPA nem Micrometer; de
+Spring AI, só `@Tool`/`@ToolParam` e o `ToolCallResultConverter` nas tools — exceção assumida de propósito:
+abstrair exigiria schema JSON à mão e adaptador a mais para o mesmo comportamento. O laço de tool calling
+é próprio (`AskAgentUseCase`), não advisor do `ChatClient`, para aplicar critério protegido → teto de
+buscas → grounding na mesma ordem do Python.
 
 **Mexeu num lado, mexa no outro** — estas peças são contrato entre as versões:
 

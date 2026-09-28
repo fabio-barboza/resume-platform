@@ -10,17 +10,20 @@ import dev.resumeplatform.resumeai.core.domain.Candidate;
 import dev.resumeplatform.resumeai.core.domain.CandidateIdentity;
 import dev.resumeplatform.resumeai.core.domain.exception.EmailAlreadyInUseException;
 import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
+import dev.resumeplatform.resumeai.infra.entity.CandidateEntity;
+import dev.resumeplatform.resumeai.infra.mapper.ResumeEntityMapper;
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
-import dev.resumeplatform.resumeai.infra.repository.UniqueViolation;
-import dev.resumeplatform.resumeai.infra.repository.entity.CandidateEntity;
-import dev.resumeplatform.resumeai.infra.repository.mapper.ResumeEntityMapper;
+import dev.resumeplatform.resumeai.infra.repository.CandidateSearchRepository;
+import dev.resumeplatform.resumeai.infra.support.UniqueViolation;
 
 @Component
 public class CandidateGatewayImpl implements CandidateGateway {
     private final CandidateRepository candidates;
+    private final CandidateSearchRepository search;
 
-    public CandidateGatewayImpl(CandidateRepository candidates) {
+    public CandidateGatewayImpl(CandidateRepository candidates, CandidateSearchRepository search) {
         this.candidates = candidates;
+        this.search = search;
     }
 
     @Override
@@ -35,7 +38,7 @@ public class CandidateGatewayImpl implements CandidateGateway {
 
     @Override
     public List<Candidate> searchByName(String term, int limit) {
-        return candidates.searchByName(term, limit).stream().map(ResumeEntityMapper::toDomain).toList();
+        return search.searchByName(term, limit).stream().map(ResumeEntityMapper::toDomain).toList();
     }
 
     @Override

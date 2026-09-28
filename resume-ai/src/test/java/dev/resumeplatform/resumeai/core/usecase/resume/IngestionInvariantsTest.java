@@ -30,7 +30,7 @@ import dev.resumeplatform.resumeai.core.usecase.candidate.ReplaceCandidateUseCas
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
 import dev.resumeplatform.resumeai.infra.repository.ChunkRepository;
 import dev.resumeplatform.resumeai.infra.repository.DocumentRepository;
-import dev.resumeplatform.resumeai.infra.repository.entity.ChunkEntity;
+import dev.resumeplatform.resumeai.infra.entity.ChunkEntity;
 import dev.resumeplatform.resumeai.support.DatabaseTest;
 import dev.resumeplatform.resumeai.support.PdfFixtures;
 
