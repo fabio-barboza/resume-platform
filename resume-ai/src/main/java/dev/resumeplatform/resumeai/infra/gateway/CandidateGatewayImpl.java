@@ -11,6 +11,7 @@ import dev.resumeplatform.resumeai.core.domain.CandidateIdentity;
 import dev.resumeplatform.resumeai.core.domain.exception.EmailAlreadyInUseException;
 import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
+import dev.resumeplatform.resumeai.infra.repository.UniqueViolation;
 import dev.resumeplatform.resumeai.infra.repository.entity.CandidateEntity;
 import dev.resumeplatform.resumeai.infra.repository.mapper.ResumeEntityMapper;
 

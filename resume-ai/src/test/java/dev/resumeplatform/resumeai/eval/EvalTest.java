@@ -20,9 +20,9 @@ import dev.resumeplatform.resumeai.core.domain.chat.AgentListener;
 import dev.resumeplatform.resumeai.core.domain.chat.TurnResult;
 import dev.resumeplatform.resumeai.core.domain.guardrail.PersonMentions;
 import dev.resumeplatform.resumeai.core.domain.text.TextFolding;
+import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
 import dev.resumeplatform.resumeai.core.usecase.chat.AskAgentUseCase;
 import dev.resumeplatform.resumeai.core.usecase.resume.IngestResumeUseCase;
-import dev.resumeplatform.resumeai.core.usecase.resume.ListInventoryUseCase;
 import dev.resumeplatform.resumeai.support.DatabaseTest;
 import dev.resumeplatform.resumeai.support.PdfFixtures;
 
@@ -33,7 +33,7 @@ public abstract class EvalTest extends DatabaseTest {
     @Autowired
     protected IngestResumeUseCase ingestResume;
     @Autowired
-    protected ListInventoryUseCase listInventory;
+    protected ResumeGateway resumes;
     @Autowired
     protected AskAgentUseCase askAgent;
 
@@ -52,7 +52,7 @@ public abstract class EvalTest extends DatabaseTest {
                     throw new UncheckedIOException(ex);
                 }
             }
-            assertThat(listInventory.execute()).as("esperava %d currículos ingeridos", pdfs.size())
+            assertThat(resumes.inventory()).as("esperava %d currículos ingeridos", pdfs.size())
                     .hasSize(pdfs.size());
             populated = true;
         }
@@ -71,7 +71,7 @@ public abstract class EvalTest extends DatabaseTest {
     }
 
     protected List<Set<String>> realNameTokens() {
-        return listInventory.execute().stream()
+        return resumes.inventory().stream()
                 .filter(r -> r.name() != null)
                 .map(r -> fold(r.name()))
                 .toList();

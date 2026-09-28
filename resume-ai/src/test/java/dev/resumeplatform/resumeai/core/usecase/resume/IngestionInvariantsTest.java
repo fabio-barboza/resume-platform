@@ -25,6 +25,7 @@ import dev.resumeplatform.resumeai.core.domain.IngestionOutcome;
 import dev.resumeplatform.resumeai.core.domain.ResumeStatus;
 import dev.resumeplatform.resumeai.core.domain.exception.ConflictException;
 import dev.resumeplatform.resumeai.core.domain.exception.InvalidDocumentException;
+import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
 import dev.resumeplatform.resumeai.core.usecase.candidate.ReplaceCandidateUseCase;
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
 import dev.resumeplatform.resumeai.infra.repository.ChunkRepository;
@@ -52,7 +53,7 @@ class IngestionInvariantsTest extends DatabaseTest {
     @Autowired
     ListResumesUseCase listResumes;
     @Autowired
-    ListInventoryUseCase listInventory;
+    ResumeGateway resumes;
     @Autowired
     ReplaceCandidateUseCase replaceCandidate;
     @Autowired
@@ -105,7 +106,7 @@ class IngestionInvariantsTest extends DatabaseTest {
         assertThat(second.duplicate()).isTrue();
         assertThat(second.documentId()).isEqualTo(first.documentId());
         assertThat(second.candidateId()).isEqualTo(first.candidateId());
-        assertThat(listInventory.execute()).filteredOn(r -> r.id() == first.documentId()).hasSize(1);
+        assertThat(resumes.inventory()).filteredOn(r -> r.id() == first.documentId()).hasSize(1);
         assertThat(chunkCountInDb(first.documentId())).isEqualTo(first.chunkCount());
     }
 

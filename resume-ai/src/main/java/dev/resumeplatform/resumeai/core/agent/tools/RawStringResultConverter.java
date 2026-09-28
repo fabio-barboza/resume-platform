@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.entrypoint.agent.tools;
+package dev.resumeplatform.resumeai.core.agent.tools;
 
 import java.lang.reflect.Type;
 

@@ -587,7 +587,10 @@ Detalhes da extração:
 Clean Architecture com as dependências apontando para o `core`: `entrypoint` e
 `infra` dependem dele, ele não depende de nenhum dos dois. O `core` não importa
 JPA, Spring AI nem Micrometer — só `@Service` e as anotações/templates de
-transação do Spring.
+transação do Spring. A exceção são as tools do agente (`core/agent/tools/`), que
+usam `@Tool`/`@ToolParam` do Spring AI: quem as executa é o laço do
+`AskAgentUseCase`, então moram no `core`, e trocar as anotações por uma
+abstração própria custaria schema JSON à mão sem mudar comportamento.
 
 ```
 src/main/java/dev/resumeplatform/resumeai/
@@ -597,8 +600,9 @@ src/main/java/dev/resumeplatform/resumeai/
                      PersonMentions), chunking/, text/, settings/,
                      service/ (etapas que mais de um use case compartilha)
     usecase/         um caso de uso por classe (@Service), separados por domínio:
-                     resume/, candidate/, chat/, search/, health/ — use case nunca injeta outro
+                     resume/, candidate/, chat/, health/ — use case nunca injeta outro
     gateway/         interfaces para tudo que é externo, uma por agregado
+    agent/tools/     as 4 tools do agente (@Tool), executadas pelo AskAgentUseCase
   infra/
     gateway/         *GatewayImpl: implementam core/gateway com Spring Data, Spring AI, S3, PDFBox
     repository/      Spring Data + fragments Criteria, entity/ (*Entity), projection/, mapper/
@@ -606,7 +610,6 @@ src/main/java/dev/resumeplatform/resumeai/
   entrypoint/
     controller/      controllers finos + request/ response/ mapper/ + sse/ (ChatStreamer);
                      ApiExceptionHandler é o único lugar com status HTTP
-    agent/tools/     as 4 tools do agente (@Tool)
   config/            propriedades tipadas, leitor de .env e o wiring
 src/main/resources/
   application.yml
@@ -622,10 +625,11 @@ O agente é o `AskAgentUseCase`: carrega o histórico, roda o laço e grava o
 turno. O `ChatModelGateway` é a única porta do laço para o modelo: chama o LLM
 em streaming e executa as tools.
 
-As tools ficam em `entrypoint/`, não em `infra/`: para a aplicação o modelo é
-só mais um cliente, então elas chamam use cases como um controller faz. Os
+As tools ficam em `core/agent/tools/`: quem as executa é o laço do
+`AskAgentUseCase`, não um cliente de fora. Elas consultam os gateways direto,
+sem passar por use case — seria um use case chamando outro por tabela. Os
 callbacks delas chegam ao gateway do modelo por um bean do `config/`, para que
-`infra` não dependa de `entrypoint`.
+`infra` não dependa do `core/agent` por import.
 
 O que o POST e o PUT de currículo compartilham (ler, validar, extrair contato e
 gerar embeddings; resolver o candidato) está em `core/domain/service/`

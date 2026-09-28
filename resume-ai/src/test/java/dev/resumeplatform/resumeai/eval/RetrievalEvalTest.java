@@ -15,19 +15,23 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import dev.resumeplatform.resumeai.config.ResumeAiProperties;
+import dev.resumeplatform.resumeai.core.domain.Candidate;
 import dev.resumeplatform.resumeai.core.domain.CandidateWithResume;
 import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
-import dev.resumeplatform.resumeai.core.usecase.candidate.SearchCandidatesByNameUseCase;
-import dev.resumeplatform.resumeai.core.usecase.search.SearchSimilarChunksUseCase;
+import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
+import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
+import dev.resumeplatform.resumeai.core.gateway.EmbeddingGateway;
 
 class RetrievalEvalTest extends EvalTest {
     private static final int OVERFETCH = 6;
     private static final double MIN_RECALL = 0.80;
 
     @Autowired
-    SearchSimilarChunksUseCase vectorSearch;
+    EmbeddingGateway embeddings;
     @Autowired
-    SearchCandidatesByNameUseCase searchByName;
+    ChunkGateway chunks;
+    @Autowired
+    CandidateGateway candidates;
     @Autowired
     ResumeAiProperties properties;
 
@@ -68,13 +72,22 @@ class RetrievalEvalTest extends EvalTest {
     private List<String> ranked(String question) {
         return CACHE.computeIfAbsent(question, q -> {
             List<String> seen = new ArrayList<>();
-            for (ResumeSnippet row : vectorSearch.execute(q, kMeasured() * OVERFETCH)) {
+            for (ResumeSnippet row : chunks.findNearest(embeddings.embed(q), kMeasured() * OVERFETCH)) {
                 if (row.candidateName() != null && !seen.contains(row.candidateName())) {
                     seen.add(row.candidateName());
                 }
             }
             return seen.subList(0, Math.min(kMeasured(), seen.size()));
         });
+    }
+
+    /** Mesma consulta da tool {@code find_candidate_by_name}, sem a formatação em texto. */
+    private List<CandidateWithResume> searchByName(String term) {
+        List<CandidateWithResume> found = new ArrayList<>();
+        for (Candidate candidate : candidates.searchByName(term, 10)) {
+            found.add(CandidateWithResume.of(candidate, chunks.findByCandidate(candidate.id())));
+        }
+        return found;
     }
 
     private Integer rankOf(String question, String expected) {
@@ -96,7 +109,7 @@ class RetrievalEvalTest extends EvalTest {
     @ValueSource(strings = {"Rafael Mendes", "Márcia Oliveira", "Bruno Carvalho", "Amanda Rocha", "Vitor Lopes",
             "Marisa Ferreira"})
     void searchByProperNameReturnsTheResume(String name) {
-        List<CandidateWithResume> found = searchByName.execute(name);
+        List<CandidateWithResume> found = searchByName(name);
         assertThat(found).extracting(CandidateWithResume::name).containsExactly(name);
         assertThat(found.getFirst().chunks()).as("%s veio sem conteúdo de currículo", name).isNotEmpty();
     }
@@ -105,12 +118,12 @@ class RetrievalEvalTest extends EvalTest {
     @CsvSource({"bruno carvalho,Bruno Carvalho", "marcia,Márcia Oliveira", "MENDES,Rafael Mendes",
             "carvalho bruno,Bruno Carvalho"})
     void searchByNameToleratesTyping(String term, String expected) {
-        assertThat(searchByName.execute(term)).extracting(CandidateWithResume::name).containsExactly(expected);
+        assertThat(searchByName(term)).extracting(CandidateWithResume::name).containsExactly(expected);
     }
 
     @Test
     void nonexistentNameIsNotInvented() {
-        assertThat(searchByName.execute("Fulano Inexistente da Silva")).isEmpty();
+        assertThat(searchByName("Fulano Inexistente da Silva")).isEmpty();
     }
 
     @Test

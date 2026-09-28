@@ -11,9 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import dev.resumeplatform.resumeai.core.domain.CandidateChunk;
-import dev.resumeplatform.resumeai.core.usecase.candidate.CountCandidatesBySkillUseCase;
-import dev.resumeplatform.resumeai.core.usecase.candidate.SearchCandidatesByNameUseCase;
+import dev.resumeplatform.resumeai.core.agent.tools.ResumeTools;
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
 import dev.resumeplatform.resumeai.infra.repository.ChunkRepository;
 import dev.resumeplatform.resumeai.infra.repository.DocumentRepository;
@@ -30,9 +28,7 @@ class CandidateCountTest extends DatabaseTest {
     @Autowired
     ChunkRepository chunks;
     @Autowired
-    CountCandidatesBySkillUseCase countBySkill;
-    @Autowired
-    SearchCandidatesByNameUseCase searchByName;
+    ResumeTools tools;
     @Autowired
     TransactionTemplate transaction;
 
@@ -96,23 +92,21 @@ class CandidateCountTest extends DatabaseTest {
     }
 
     @Test
-    void serviceNormalizesTerms() {
-        var counts = countBySkill.execute(List.of(" Python ", "Python", "", "Cobol"));
-        assertThat(counts.keySet()).containsExactly("Python", "Cobol");
-        assertThat(counts).isEqualTo(Map.of("Python", 1L, "Cobol", 0L));
+    void toolNormalizesTerms() {
+        assertThat(tools.countCandidatesBySkill(List.of(" Python ", "Python", "", "Cobol")))
+                .endsWith("\n- Python: 1\n- Cobol: 0");
     }
 
     @Test
-    void serviceEmptyListDoesNotHitTheDatabase() {
-        assertThat(countBySkill.execute(List.of("", "   "))).isEmpty();
+    void toolWithoutTermsDoesNotCount() {
+        assertThat(tools.countCandidatesBySkill(List.of("", "   "))).endsWith("\nNenhum termo informado.");
     }
 
     @Test
     void searchByNameToleratesTyping() {
-        var found = searchByName.execute("BETO");
-        assertThat(found).extracting(c -> c.name()).containsExactly("Beto");
-        assertThat(found.getFirst().chunks()).extracting(CandidateChunk::content)
-                .containsExactly("Backend em Python e Django.");
-        assertThat(searchByName.execute("Fulano Inexistente")).isEmpty();
+        String found = tools.findCandidateByName("BETO");
+        assertThat(found).startsWith("Candidato: Beto").endsWith("Conteudo: Backend em Python e Django.")
+                .doesNotContain("Ana");
+        assertThat(tools.findCandidateByName("Fulano Inexistente")).startsWith("Nenhum candidato");
     }
 }

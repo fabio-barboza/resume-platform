@@ -1,14 +1,14 @@
-package dev.resumeplatform.resumeai.infra.gateway;
+package dev.resumeplatform.resumeai.infra.repository;
 
 import java.sql.SQLException;
 
-final class UniqueViolation {
+public final class UniqueViolation {
     private static final String UNIQUE_VIOLATION = "23505";
 
     private UniqueViolation() {
     }
 
-    static boolean isCause(Throwable error) {
+    public static boolean isCause(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
             if (cause instanceof SQLException sql && UNIQUE_VIOLATION.equals(sql.getSQLState())) {
                 return true;

@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.entrypoint.agent.tools;
+package dev.resumeplatform.resumeai.core.agent.tools;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -14,6 +14,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import dev.resumeplatform.resumeai.core.domain.Candidate;
 import dev.resumeplatform.resumeai.core.domain.CandidateChunk;
 import dev.resumeplatform.resumeai.core.domain.CandidateWithResume;
 import dev.resumeplatform.resumeai.core.domain.InventoryEntry;
@@ -21,15 +22,15 @@ import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
 import dev.resumeplatform.resumeai.core.domain.ResumeStatus;
 import dev.resumeplatform.resumeai.core.domain.settings.AgentSettings;
 import dev.resumeplatform.resumeai.core.domain.text.PyRepr;
-import dev.resumeplatform.resumeai.core.usecase.candidate.CountCandidatesBySkillUseCase;
-import dev.resumeplatform.resumeai.core.usecase.candidate.SearchCandidatesByNameUseCase;
-import dev.resumeplatform.resumeai.core.usecase.resume.ListInventoryUseCase;
-import dev.resumeplatform.resumeai.core.usecase.search.SearchSimilarChunksUseCase;
+import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
+import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
+import dev.resumeplatform.resumeai.core.gateway.EmbeddingGateway;
+import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
 
 /**
- * As 4 ferramentas do agente. Para a aplicação o modelo é só mais um cliente, como a webui num controller:
- * cada tool traduz a chamada para um use case e formata o resultado. Nome, descrição e texto de saída são
- * contrato com o resume-agent.
+ * As 4 ferramentas do agente, executadas pelo laço do {@code AskAgentUseCase}: cada tool consulta os gateways
+ * e formata o resultado. Não chamam use case, pelo mesmo motivo que um use case não chama outro. Nome, descrição e texto de saída são contrato com o resume-agent.
+ * Únicas classes do {@code core} com Spring AI ({@code @Tool}/{@code @ToolParam}), exceção assumida de propósito.
  */
 @Component
 public class ResumeTools {
@@ -37,20 +38,22 @@ public class ResumeTools {
 
     static final int OVERFETCH = 6;
 
-    private final SearchSimilarChunksUseCase searchSimilarChunks;
-    private final SearchCandidatesByNameUseCase searchCandidatesByName;
-    private final CountCandidatesBySkillUseCase countCandidatesBySkill;
-    private final ListInventoryUseCase listInventory;
+    static final int NAME_SEARCH_LIMIT = 10;
+
+    static final int MAX_SKILL_TERMS = 10;
+
+    private final EmbeddingGateway embeddings;
+    private final ChunkGateway chunks;
+    private final CandidateGateway candidates;
+    private final ResumeGateway resumes;
     private final AgentSettings settings;
 
-    public ResumeTools(SearchSimilarChunksUseCase searchSimilarChunks,
-            SearchCandidatesByNameUseCase searchCandidatesByName,
-            CountCandidatesBySkillUseCase countCandidatesBySkill, ListInventoryUseCase listInventory,
-            AgentSettings settings) {
-        this.searchSimilarChunks = searchSimilarChunks;
-        this.searchCandidatesByName = searchCandidatesByName;
-        this.countCandidatesBySkill = countCandidatesBySkill;
-        this.listInventory = listInventory;
+    public ResumeTools(EmbeddingGateway embeddings, ChunkGateway chunks, CandidateGateway candidates,
+            ResumeGateway resumes, AgentSettings settings) {
+        this.embeddings = embeddings;
+        this.chunks = chunks;
+        this.candidates = candidates;
+        this.resumes = resumes;
         this.settings = settings;
     }
 
@@ -73,8 +76,8 @@ public class ResumeTools {
                     mainframe e sistemas legados", "automação de testes com Cypress").""")
     public String findInResumes(@ToolParam(description = "o que procurar, em linguagem natural") String question) {
         int perSearch = settings.candidatesPerSearch();
-        List<ResumeSnippet> best = bestPerCandidate(searchSimilarChunks.execute(question, perSearch * OVERFETCH),
-                perSearch);
+        List<ResumeSnippet> best = bestPerCandidate(
+                chunks.findNearest(embeddings.embed(question), perSearch * OVERFETCH), perSearch);
         return best.stream().map(ResumeTools::formatSnippet).collect(Collectors.joining("\n\n"));
     }
 
@@ -91,7 +94,10 @@ public class ResumeTools {
                 name: nome ou parte do nome do candidato (ex.: "Bruno Carvalho",
                     "marcia", "mendes").""")
     public String findCandidateByName(@ToolParam(description = "nome ou parte do nome do candidato") String name) {
-        List<CandidateWithResume> found = searchCandidatesByName.execute(name);
+        List<CandidateWithResume> found = new ArrayList<>();
+        for (Candidate candidate : candidates.searchByName(name, NAME_SEARCH_LIMIT)) {
+            found.add(CandidateWithResume.of(candidate, chunks.findByCandidate(candidate.id())));
+        }
         if (found.isEmpty()) {
             return "Nenhum candidato com nome parecido com " + PyRepr.of(name) + ". "
                     + "Este é o cadastro completo: se não está aqui, não está na base.";
@@ -136,23 +142,22 @@ public class ResumeTools {
                     "Java", "Cobol"]).""")
     public String countCandidatesBySkill(
             @ToolParam(description = "termos a contar, um por tecnologia/critério") List<String> skills) {
-        List<String> requested = skills == null ? List.of() : skills;
-        int total = listInventory.execute().size();
-        Map<String, Long> counts = countCandidatesBySkill.execute(requested);
-        if (counts.isEmpty()) {
+        List<String> terms = normalizeSkillTerms(skills == null ? List.of() : skills);
+        int total = resumes.inventory().size();
+        if (terms.isEmpty()) {
             return "Total de candidatos na base: " + total + "\nNenhum termo informado.";
         }
 
+        Map<String, Long> counts =
+                chunks.countCandidatesByTerms(terms.subList(0, Math.min(MAX_SKILL_TERMS, terms.size())));
         String lines = counts.entrySet().stream()
                 .map(e -> "- " + e.getKey() + ": " + e.getValue())
                 .collect(Collectors.joining("\n"));
         String body = "Total de candidatos na base: " + total + "\n" + lines;
 
-        List<String> ignored = CountCandidatesBySkillUseCase.normalizeSkillTerms(requested).stream()
-                .filter(t -> !counts.containsKey(t))
-                .toList();
+        List<String> ignored = terms.stream().filter(t -> !counts.containsKey(t)).toList();
         if (!ignored.isEmpty()) {
-            body += "\nTermos ignorados (limite de " + CountCandidatesBySkillUseCase.MAX_SKILL_TERMS + " por chamada): "
+            body += "\nTermos ignorados (limite de " + MAX_SKILL_TERMS + " por chamada): "
                     + String.join(", ", ignored);
         }
         return body;
@@ -170,7 +175,7 @@ public class ResumeTools {
             Não traz o conteúdo dos currículos: para experiência, tecnologia, formação
             ou qualquer coisa descrita no texto, use `find_in_resumes`.""")
     public String listResumes() {
-        List<InventoryEntry> records = listInventory.execute();
+        List<InventoryEntry> records = resumes.inventory();
         if (records.isEmpty()) {
             return "Total de currículos na base: 0\nA base está vazia.";
         }
@@ -186,6 +191,17 @@ public class ResumeTools {
                     + " (arquivo " + basename(r.filename()) + ")" + pending);
         }
         return "Total de currículos na base: " + records.size() + "\n" + String.join("\n", lines);
+    }
+
+    /** Tira espaço das pontas, descarta vazio e duplicata, mantendo a ordem pedida. */
+    static List<String> normalizeSkillTerms(List<String> skills) {
+        Set<String> seen = new LinkedHashSet<>();
+        for (String skill : skills) {
+            if (skill != null && !skill.strip().isEmpty()) {
+                seen.add(skill.strip());
+            }
+        }
+        return List.copyOf(seen);
     }
 
     static List<ResumeSnippet> bestPerCandidate(List<ResumeSnippet> rows, int limit) {

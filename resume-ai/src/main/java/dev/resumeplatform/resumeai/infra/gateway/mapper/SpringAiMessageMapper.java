@@ -1,4 +1,4 @@
-package dev.resumeplatform.resumeai.infra.gateway;
+package dev.resumeplatform.resumeai.infra.gateway.mapper;
 
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -8,13 +8,13 @@ import org.springframework.ai.chat.messages.UserMessage;
 import dev.resumeplatform.resumeai.core.domain.chat.ChatMessage;
 import dev.resumeplatform.resumeai.core.domain.chat.ToolCall;
 
-final class SpringAiMessageMapper {
+public final class SpringAiMessageMapper {
     private static final String FUNCTION = "function";
 
     private SpringAiMessageMapper() {
     }
 
-    static Message toSpringAi(ChatMessage message) {
+    public static Message toSpringAi(ChatMessage message) {
         return switch (message) {
             case ChatMessage.User user -> new UserMessage(user.text());
             case ChatMessage.Assistant assistant -> AssistantMessage.builder()
@@ -31,7 +31,7 @@ final class SpringAiMessageMapper {
         };
     }
 
-    static ToolCall toDomain(AssistantMessage.ToolCall call) {
+    public static ToolCall toDomain(AssistantMessage.ToolCall call) {
         return new ToolCall(call.id(), call.name(), call.arguments());
     }
 }

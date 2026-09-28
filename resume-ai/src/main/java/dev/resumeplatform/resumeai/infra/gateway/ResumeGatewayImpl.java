@@ -14,6 +14,7 @@ import dev.resumeplatform.resumeai.core.domain.exception.DuplicateFileException;
 import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
 import dev.resumeplatform.resumeai.infra.repository.CandidateRepository;
 import dev.resumeplatform.resumeai.infra.repository.DocumentRepository;
+import dev.resumeplatform.resumeai.infra.repository.UniqueViolation;
 import dev.resumeplatform.resumeai.infra.repository.entity.DocumentEntity;
 import dev.resumeplatform.resumeai.infra.repository.mapper.ResumeEntityMapper;
 

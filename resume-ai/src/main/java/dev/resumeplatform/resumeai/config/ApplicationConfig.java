@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 
 import dev.resumeplatform.resumeai.core.domain.settings.AgentSettings;
 import dev.resumeplatform.resumeai.core.domain.settings.IngestionSettings;
-import dev.resumeplatform.resumeai.entrypoint.agent.tools.ResumeTools;
+import dev.resumeplatform.resumeai.core.agent.tools.ResumeTools;
 
 @Configuration
 public class ApplicationConfig {

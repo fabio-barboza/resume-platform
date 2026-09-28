@@ -1,8 +1,8 @@
 package dev.resumeplatform.resumeai.core.usecase.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -24,6 +24,7 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.resumeplatform.resumeai.config.ResumeAiProperties;
+import dev.resumeplatform.resumeai.core.agent.tools.ResumeTools;
 import dev.resumeplatform.resumeai.core.domain.CriterionTriage;
 import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
 import dev.resumeplatform.resumeai.core.domain.chat.AgentListener;
@@ -34,12 +35,11 @@ import dev.resumeplatform.resumeai.core.domain.chat.TurnResult;
 import dev.resumeplatform.resumeai.core.domain.guardrail.GroundingGuardrail;
 import dev.resumeplatform.resumeai.core.domain.guardrail.ProtectedCriterionGuardrail;
 import dev.resumeplatform.resumeai.core.domain.settings.AgentSettings;
+import dev.resumeplatform.resumeai.core.gateway.CandidateGateway;
 import dev.resumeplatform.resumeai.core.gateway.ChatHistoryGateway;
-import dev.resumeplatform.resumeai.core.usecase.candidate.CountCandidatesBySkillUseCase;
-import dev.resumeplatform.resumeai.core.usecase.candidate.SearchCandidatesByNameUseCase;
-import dev.resumeplatform.resumeai.core.usecase.resume.ListInventoryUseCase;
-import dev.resumeplatform.resumeai.core.usecase.search.SearchSimilarChunksUseCase;
-import dev.resumeplatform.resumeai.entrypoint.agent.tools.ResumeTools;
+import dev.resumeplatform.resumeai.core.gateway.ChunkGateway;
+import dev.resumeplatform.resumeai.core.gateway.EmbeddingGateway;
+import dev.resumeplatform.resumeai.core.gateway.ResumeGateway;
 import dev.resumeplatform.resumeai.infra.gateway.ChatModelGatewayImpl;
 import dev.resumeplatform.resumeai.infra.gateway.TracingGatewayImpl;
 import io.micrometer.observation.ObservationRegistry;
@@ -68,7 +68,7 @@ class AskAgentUseCaseTest {
         }
     });
 
-    private SearchSimilarChunksUseCase vectorSearch;
+    private ChunkGateway chunks;
     private ResumeTools tools;
     private final List<String> events = new ArrayList<>();
     private final AgentListener recorder = new AgentListener() {
@@ -90,12 +90,12 @@ class AskAgentUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        vectorSearch = mock(SearchSimilarChunksUseCase.class);
-        when(vectorSearch.execute(anyString(), anyInt())).thenReturn(List.of(new ResumeSnippet(
+        chunks = mock(ChunkGateway.class);
+        when(chunks.findNearest(any(), anyInt())).thenReturn(List.of(new ResumeSnippet(
                 "Larissa Moura, engenheira de machine learning.", 0, 0, 7L, "curriculo_larissa.pdf", 3L,
                 "Larissa Moura", "larissa@example.com", 0.1)));
-        tools = new ResumeTools(vectorSearch, mock(SearchCandidatesByNameUseCase.class),
-                mock(CountCandidatesBySkillUseCase.class), mock(ListInventoryUseCase.class), SETTINGS);
+        tools = new ResumeTools(mock(EmbeddingGateway.class), chunks, mock(CandidateGateway.class),
+                mock(ResumeGateway.class), SETTINGS);
     }
 
     private ChatModelGatewayImpl model(ScriptedChatModel model) {
@@ -177,7 +177,7 @@ class AskAgentUseCaseTest {
 
         TurnResult result = agent(model, CriterionTriage.allowed()).execute("s", "Quem faz ML?", recorder);
 
-        verify(vectorSearch, times(2)).execute(anyString(), anyInt());
+        verify(chunks, times(2)).findNearest(any(), anyInt());
         var blocked = (ToolResponseMessage) model.prompts.get(3).getLast();
         assertThat(blocked.getResponses().getFirst().responseData()).startsWith("Limite de 2 buscas por pergunta");
         assertThat(result.content()).contains("parcial");
@@ -193,7 +193,7 @@ class AskAgentUseCaseTest {
         assertThat(result.content()).startsWith("Não filtro candidatos por gênero.");
         assertThat(result.messages()).hasSize(2).first().isInstanceOf(ChatMessage.User.class);
         assertThat(model.prompts).isEmpty();
-        verify(vectorSearch, never()).execute(anyString(), anyInt());
+        verify(chunks, never()).findNearest(any(), anyInt());
     }
 
     @Test
