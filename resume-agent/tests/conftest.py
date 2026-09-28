@@ -27,7 +27,8 @@ load_dotenv()
 from resume_agent.db.engine import database_url, dispose_engine
 from resume_agent.paths import PROJECT_ROOT
 
-SAMPLES_DIR = PROJECT_ROOT / "resumes_samples"
+# Na raiz do repositório, não do resume-agent: os currículos servem às duas versões.
+SAMPLES_DIR = PROJECT_ROOT.parent / "resumes_samples"
 
 _APP_URL = make_url(database_url())
 _APP_DB = _APP_URL.database

@@ -1,0 +1,13 @@
+# Build do Maven
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Logs dos scripts de subida
+logs/
+
+# Secrets
+.env

@@ -104,19 +104,34 @@ pgvector + HNSW                PDFs originais     traces (opcional)
 | **Persistência síncrona de propósito** | Os endpoints são `def`, não `async def`, e rodam no threadpool do FastAPI. `async` com `asyncpg` fica para quando houver necessidade real de concorrência, não antes. |
 | **Nenhum `CREATE TABLE` em runtime** | O schema só muda por migração Alembic versionada. Trocar o modelo de embedding exige migração, porque a dimensão do vetor está na coluna. |
 
-## Os 2 projetos
+## Os 3 projetos
 
 | Diretório | Stack | Porta | Responsabilidade |
 |-----------|-------|-------|------------------|
 | [`resume-webui/`](resume-webui/) | Vite 8, marked 18 (JS puro) | 5173 | Chat no browser; renderiza markdown, desenha os gráficos (Chart.js), abre o PDF do currículo lado a lado, indica saúde da API e alterna tema claro/escuro |
 | [`resume-agent/`](resume-agent/README.md) | Python 3.13, FastAPI, LangChain + LangGraph, SQLAlchemy, Alembic | 8000 | O agente, os guardrails, a ingestão de PDFs e a API REST |
+| [`resume-ai/`](resume-ai/README.md) | Java 21, Spring Boot 4, Spring AI 2, JPA/Hibernate, Flyway | 8000 | **O mesmo backend em Java**: mesma API, mesmo banco, mesmo bucket, mesmos guardrails — sobe *no lugar* do resume-agent, nunca ao lado |
 
 O `resume-agent` tem [README próprio](resume-agent/README.md), bem mais fundo: modelo de dados,
-contrato da API, idempotência, evals e o detalhamento de cada guardrail.
+contrato da API, idempotência, evals e o detalhamento de cada guardrail. O
+[`resume-ai`](resume-ai/README.md) documenta o que muda na versão Java e o que precisa ficar igual
+nas duas.
+
+Os dois backends são intercambiáveis: a webui não sabe qual está respondendo. Como usam a mesma
+porta, o script de subida escolhe um — `--python` (padrão) ou `--java`.
+
+O que é dos dois fica na raiz, fora de qualquer um deles:
+
+| Diretório | O que é |
+|-----------|---------|
+| [`infra/`](infra/docker-compose.yaml) | `docker-compose.yaml` do Postgres/pgvector e do MinIO — mesmo banco e mesmo bucket para as duas versões |
+| [`resumes_samples/`](resumes_samples/README.md) | 32 currículos fictícios: usados pelo `--seed` e pelas suítes de teste das duas versões |
+| [`contract-tests/`](contract-tests/README.md) | o contrato HTTP que as duas versões precisam cumprir igual, em Node puro, rodando contra o backend que estiver no ar |
 
 ## Pré-requisitos
 
-- **Python 3.13** e [**uv**](https://docs.astral.sh/uv/)
+- **Python 3.13** e [**uv**](https://docs.astral.sh/uv/) — backend Python (padrão)
+- **JDK 21+** — só para o backend Java (`--java`); o Maven vem pelo wrapper `mvnw`
 - **Node 20+** com npm
 - **Docker** com o plugin Compose v2, daemon rodando
 - **Uma LLM e um modelo de embeddings** com API compatível com OpenAI, acessíveis pelo agent
@@ -133,19 +148,24 @@ mas o chat e a ingestão só funcionam quando eles estiverem no ar.
 
 ```bash
 cp resume-agent/.env.example resume-agent/.env   # só na primeira vez
-./start.sh                                       # Linux / macOS
+./start.sh                                       # Linux / macOS, backend Python
+./start.sh --java                                # o mesmo, com o backend Java (resume-ai)
 ```
 
 ```bat
 .\start.bat         REM Windows (wrapper do start.ps1)
+.\start.bat -Java   REM backend Java
 ```
+
+Com `--java`, o `.env` lido é o do `resume-ai/` (`cp resume-ai/.env.example resume-ai/.env`) —
+mesmas variáveis, mesmos valores.
 
 Um comando sobe tudo; `Ctrl+C` derruba tudo. Ao final o script imprime:
 
 | URL | O que é |
 |-----|---------|
 | <http://localhost:5173> | webui — a demo |
-| <http://localhost:8000> | resume-agent (API) |
+| <http://localhost:8000> | resume-agent ou resume-ai (API) |
 | <http://localhost:8000/docs> | Swagger da API |
 | <http://localhost:9001> | console do MinIO |
 
@@ -161,11 +181,13 @@ exemplo que acompanham o repositório, com `./start.sh --seed`.
 
 | Bash | PowerShell | Efeito |
 |------|-----------|--------|
-| *(nenhuma)* | *(nenhuma)* | sobe tudo **sem reinstalar** dependências |
-| `--build` | `-Build` | força `uv sync` no agent e `npm install` no webui |
-| `--no-build` | `-NoBuild` | nunca instala: falha se faltar `.venv` ou `node_modules` |
+| *(nenhuma)* | *(nenhuma)* | sobe tudo com o backend Python, **sem reinstalar** dependências |
+| `--python` | `-Python` | backend `resume-agent` (Python) — o padrão |
+| `--java` | `-Java` | backend `resume-ai` (Java), no lugar do Python |
+| `--build` | `-Build` | força `uv sync` (Python) ou `./mvnw package` (Java), e `npm install` no webui |
+| `--no-build` | `-NoBuild` | nunca instala: falha se faltar `.venv`, o jar ou `node_modules` |
 | `--seed` | `-Seed` | ingere os PDFs de `resumes_samples/` **se a base estiver vazia** |
-| `--no-reload` | `-NoReload` | sobe o uvicorn sem `--reload` |
+| `--no-reload` | `-NoReload` | sobe o uvicorn sem `--reload` (só Python) |
 | `--help` | `-Help` | imprime a tabela de flags |
 
 Comportamentos que não são óbvios:
@@ -179,6 +201,11 @@ Comportamentos que não são óbvios:
 - **O `.venv` quebrado é detectado e recriado.** Mover a pasta do projeto deixa os shebangs do
   `.venv` apontando para o caminho antigo, e todo console script morre com "arquivo não
   encontrado" — `uv sync` não conserta isso sozinho. O script testa e recria quando preciso.
+- **Nunca os dois backends juntos.** Os dois ocupam a porta 8000; com um no ar, a subida do outro
+  aborta na checagem de portas. Com `--java` não há passo de Alembic: o Flyway do `resume-ai`
+  migra o banco na própria subida da aplicação.
+- **Jar desatualizado é reempacotado.** Com `--java`, código em `resume-ai/src` mais novo que o
+  jar dispara `./mvnw package` sozinho — rodar um jar velho é rodar código que ninguém está lendo.
 - **`Ctrl+C` não perde dados.** O shutdown manda `TERM` na árvore de processos das duas apps
   (`KILL` se não morrerem em 10s) e roda `docker compose stop` — para os containers, preserva os
   volumes do Postgres e do MinIO.
@@ -309,8 +336,8 @@ buscar de novo. Foi esse eval que encontrou o defeito de busca por nome descrito
 Para debugar no IDE, sem os scripts:
 
 ```bash
-# 1. banco e bucket
-docker compose -f resume-agent/docker-compose.yaml up -d
+# 1. banco e bucket (compartilhados pelos dois backends)
+docker compose --env-file resume-agent/.env -f infra/docker-compose.yaml up -d
 
 # 2. schema
 cd resume-agent && uv sync && uv run alembic upgrade head

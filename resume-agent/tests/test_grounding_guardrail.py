@@ -544,3 +544,10 @@ class TestPersonMentions:
         """`de`/`do`/`da` ficam fora da regra: antecedem pessoa o tempo todo."""
         answer = "O currículo do Gustavo Pinheiro e o da Ana Martins."
         assert person_mentions(answer) == ["Gustavo Pinheiro", "Ana Martins"]
+
+    def test_employer_at_sentence_start_is_not_a_person(self):
+        """Falha real do eval da versão Java: "Na Netflix" no começo da frase."""
+        answer = (
+            "Na Netflix, arquitetou serviços de recomendação. No Nubank, liderou dados."
+        )
+        assert person_mentions(answer) == []

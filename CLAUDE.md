@@ -16,18 +16,19 @@ assert em português.
 
 ## Comandos
 
-Tudo abaixo roda de `resume-agent/`, exceto o `./start.sh` (raiz).
+Tudo abaixo roda de `resume-agent/`, exceto o `./start.sh` (raiz) e o bloco do `resume-ai/`.
 
 ```bash
-./start.sh                  # sobe a stack inteira (compose + migrações + API + webui)
+./start.sh                  # sobe a stack inteira (compose + migrações + API + webui), backend Python
+./start.sh --java           # idem com o backend Java (resume-ai) no lugar do Python — nunca os dois
 ./start.sh --seed           # + ingere resumes_samples/ se a base estiver vazia
 ./start.sh --build          # força uv sync + npm install
 ./start.sh --no-reload      # uvicorn sem --reload
-# Windows: .\start.bat (wrapper do start.ps1, mesmas flags com -Build/-Seed/...)
+# Windows: .\start.bat (wrapper do start.ps1, mesmas flags com -Java/-Build/-Seed/...)
 
 cd resume-agent
 uv sync
-docker compose up -d                     # Postgres/pgvector :5432 + MinIO :9000/:9001
+docker compose --env-file .env -f ../infra/docker-compose.yaml up -d   # Postgres :5432 + MinIO :9000/:9001
 uv run alembic upgrade head              # schema (obrigatório antes de subir a API)
 uv run uvicorn resume_agent.api:app --reload   # só a API
 uv run python -m resume_agent            # API numa thread + REPL do agente no terminal
@@ -41,7 +42,19 @@ uv run alembic revision -m "descrição"   # migração nova (SQL à mão; nada 
 uv run alembic downgrade -1
 
 cd ../resume-webui && npm run dev        # Vite :5173
+
+cd ../resume-ai                          # versão Java
+./mvnw package -DskipTests               # target/resume-ai-0.1.0.jar (Flyway migra na subida)
+java -jar target/resume-ai-0.1.0.jar     # lê resume-ai/.env do diretório atual
+./mvnw test                              # determinísticos (banco <db>_ai_test, bucket mockado)
+./mvnw test -Peval                       # evals: LLM e embeddings de verdade
+./mvnw test -Dtest=GroundingGuardrailTest   # uma classe (os @Nested só rodam sem -Dtest)
+
+cd ../contract-tests && npm test         # contrato HTTP contra o backend no ar (BASE_URL, padrão :8000)
 ```
+
+Compartilhado pelos dois backends, na raiz: `infra/docker-compose.yaml` (o `name: resume-agent` fixo
+mantém os volumes antigos — não mude), `resumes_samples/` e `contract-tests/`.
 
 Os **modelos são externos e não sobem pelo compose**: LLM em `MAIN_MODEL_BASE_URL`
 (`http://localhost:8200/v1` por padrão) e embeddings em `EMBEDDING_MODEL_BASE_URL`
@@ -52,8 +65,10 @@ documentação viva das variáveis — mudou config, atualize-o.
 
 ## Arquitetura
 
-Dois projetos: `resume-agent/` (Python 3.13, FastAPI + LangChain/LangGraph, :8000) e
-`resume-webui/` (Vite + JS puro + marked, :5173, chat que renderiza markdown e abre o PDF ao lado).
+Três projetos: `resume-agent/` (Python 3.13, FastAPI + LangChain/LangGraph, :8000),
+`resume-ai/` (Java 21, Spring Boot 4 + Spring AI 2 + JPA/Hibernate + Flyway, :8000 — o mesmo backend
+reescrito, sobe **no lugar** do Python) e `resume-webui/` (Vite + JS puro + marked, :5173, chat que
+renderiza markdown e abre o PDF ao lado). A webui não pode depender de qual backend está no ar.
 
 ### Camadas do agent (a regra é rígida)
 
@@ -197,6 +212,32 @@ Sem isolamento entre sessões além do id.
 `POST /chat` (síncrono, usado pelos evals e pelo REPL) e `POST /chat/stream` (SSE, usado pela
 webui) compartilham o mesmo `services/chat_service.py` — é lá que o endereçamento da thread mora,
 não no router.
+
+### resume-ai (versão Java)
+
+Mesma API, mesmo banco, mesmo bucket; detalhes em `resume-ai/README.md`. Camadas equivalentes:
+`api/` (controllers + DTOs, `ApiExceptionHandler` é o único com status HTTP), `service/`, `db/`
+(entidades JPA, Spring Data, `@Query`/fragments Criteria; `unaccent` e `cosine_distance` do
+hibernate-vector), `guardrail/`, `agent/`, `infra/`, `pdf/`. O laço de tool calling é próprio
+(`ResumeAgent`), não advisor do `ChatClient`, para aplicar critério protegido → teto de buscas →
+grounding na mesma ordem do Python.
+
+**Mexeu num lado, mexa no outro** — estas peças são contrato entre as versões:
+
+- `prompts/system_prompt.md` é **cópia** em `resume-ai/src/main/resources/prompts/`; o recuo de 4
+  espaços é reaplicado no carregamento (`SystemPrompt.indent`).
+- Nome, descrição e texto de saída das 4 tools; `_NOT_A_PERSON` ↔ `PersonMentions.NOT_A_PERSON`;
+  mensagens dos guardrails; formato do frame SSE e JSON snake_case com `null` explícito; 422 para
+  request malformado.
+- **Schema compartilhado**: coluna nova em `candidates`/`documents`/`chunks` exige migração Alembic
+  **e** Flyway. As migrações Flyway são idempotentes (`IF NOT EXISTS`, mesmos nomes de constraint do
+  SQLAlchemy, `baseline-version: 0`); a `V2` grava `alembic_version='0002'` quando é o Java quem cria
+  o schema, porque o Alembic não é idempotente. `chat_messages` é só do Java; `checkpoint_*` só do
+  Python — o histórico de conversa **não** é compartilhado entre as versões.
+- `contract-tests/` é a verificação disso: mudou rota, JSON, status ou SSE, rode `npm test` contra as
+  **duas** versões (`--python` e `--java`, ou uma delas em outra porta com `BASE_URL`).
+- Chunking: `RecursiveCharacterTextSplitter` portado (teste-ouro contra o LangChain). pypdf descarta o
+  glifo `•` que o PDFBox preserva — único motivo de chunk divergir para o mesmo PDF.
 
 ## Testes
 

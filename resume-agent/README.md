@@ -280,12 +280,14 @@ endpoint de LLM e outro de embeddings compatíveis com a API da OpenAI.
 
 ```bash
 cp .env.example .env      # ajuste modelos, endpoints e credenciais
-docker compose up -d      # sobe o Postgres com pgvector e o MinIO (bucket dos PDFs)
+docker compose --env-file .env -f ../infra/docker-compose.yaml up -d   # Postgres/pgvector + MinIO
 uv sync
 uv run alembic upgrade head
 ```
 
-O compose sobe **banco e bucket**, não a aplicação. Ela roda no host, para
+O compose mora em `infra/`, na raiz, porque serve também ao
+[`resume-ai`](../resume-ai/README.md) (a versão Java, que usa o mesmo banco e o mesmo bucket). Ele
+sobe **banco e bucket**, não a aplicação. Ela roda no host, para
 alcançar os servidores de LLM e de embeddings em `localhost`.
 
 O bucket (`resume-agent-bucket`, por padrão) é criado pela própria aplicação
@@ -335,7 +337,7 @@ instrumentação não derruba o que ela observa. O liga/desliga fica todo em
 ### Currículos de exemplo
 
 Para experimentar sem sair atrás de currículo, o repositório traz **32 PDFs**
-em `resumes_samples/`: 31 perfis fictícios mais o currículo do autor. São
+em `resumes_samples/`, na raiz (compartilhados com o resume-ai): 31 perfis fictícios mais o currículo do autor. São
 perfis de tecnologia e de fora dela (enfermeira, eletricista, contador,
 professora, motorista), justamente para a busca ter o que discriminar.
 
@@ -343,6 +345,7 @@ A pasta não é lida pela aplicação; a base se popula por upload. Todos de uma
 vez:
 
 ```bash
+# da raiz do repositório
 curl -X POST http://localhost:8000/resumes \
   $(for f in resumes_samples/*.pdf; do printf -- "-F files=@%s " "$f"; done)
 ```
@@ -504,8 +507,11 @@ src/resume_agent/
     __main__.py           # entrypoint: sobe a API e abre o REPL
 migrations/               # migrações Alembic (extensões, tabelas, índice)
 tests/                    # testes e evals (marcador `eval`)
-resumes_samples/          # currículos fictícios para testar o upload
 ```
+
+Compartilhados com o resume-ai, na raiz do repositório: `infra/docker-compose.yaml` (Postgres e
+MinIO), `resumes_samples/` (currículos fictícios) e `contract-tests/` (o contrato HTTP que as duas
+versões precisam cumprir).
 
 ## Migrações
 

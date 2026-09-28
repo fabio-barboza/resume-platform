@@ -81,6 +81,10 @@ _EMPLOYER_PREFIX = re.compile(
 # só o primeiro da lista seria descartado.
 _ENUMERATION_GAP = re.compile(r"^[\s,]*(?:e|ou)?[\s,]*$")
 
+# "Na Netflix, arquitetou...": no começo da frase a preposição sai maiúscula, tem forma de
+# palavra de nome e entra no próprio trecho casado — o prefixo de empregador acima nunca a vê.
+_EMPLOYER_LEAD = re.compile(r"^N[ao]s?\s")
+
 # Termo técnico ou de cargo que também casa com a forma de nome próprio
 # ("Engenheiro de Software Sênior", "Machine Learning", "Visão Computacional").
 # Um único termo desta lista no trecho já o desqualifica como nome de pessoa.
@@ -98,7 +102,7 @@ _NOT_A_PERSON = frozenset((
     "artificial", "atua", "augmented", "autonoma", "autonomas", "autonomo",
     "autonomos", "backend", "base", "biblioteca", "big", "boot", "candidata",
     "candidatas", "candidato", "candidatos", "certificacao", "ciencia",
-    "ciencias", "cientista", "cloud", "competencias", "computacao",
+    "ciencias", "cientista", "cloud", "code", "competencias", "computacao",
     "computacional", "context", "contexto", "coordenador", "curriculo",
     "curriculos", "dados", "data", "deep", "desenvolvedor", "desenvolvedora",
     "developer", "development", "devops", "digital", "distribuidos",
@@ -175,7 +179,11 @@ def person_mentions(text: str) -> list[str]:
         continues_list = previous_employer_end is not None and _ENUMERATION_GAP.match(
             text[previous_employer_end : match.start()]
         )
-        if _EMPLOYER_PREFIX.search(before) or continues_list:
+        if (
+            _EMPLOYER_PREFIX.search(before)
+            or _EMPLOYER_LEAD.match(match.group(0))
+            or continues_list
+        ):
             previous_employer_end = match.end()
             continue
         previous_employer_end = None
