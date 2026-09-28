@@ -5,12 +5,12 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import dev.resumeplatform.resumeai.infra.ResumeStorage;
+import dev.resumeplatform.resumeai.core.gateway.StorageGateway;
 
 @SpringBootTest
 public abstract class DatabaseTest {
     @MockitoBean
-    protected ResumeStorage storage;
+    protected StorageGateway storage;
 
     @DynamicPropertySource
     static void testDatabase(DynamicPropertyRegistry registry) {

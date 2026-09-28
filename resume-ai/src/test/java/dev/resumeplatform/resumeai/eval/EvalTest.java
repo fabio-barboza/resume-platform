@@ -16,12 +16,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import dev.resumeplatform.resumeai.agent.TurnResult;
-import dev.resumeplatform.resumeai.guardrail.PersonMentions;
-import dev.resumeplatform.resumeai.guardrail.TextFolding;
-import dev.resumeplatform.resumeai.service.ChatService;
-import dev.resumeplatform.resumeai.service.DocumentService;
-import dev.resumeplatform.resumeai.service.IngestionService;
+import dev.resumeplatform.resumeai.core.domain.chat.AgentListener;
+import dev.resumeplatform.resumeai.core.domain.chat.TurnResult;
+import dev.resumeplatform.resumeai.core.domain.guardrail.PersonMentions;
+import dev.resumeplatform.resumeai.core.domain.text.TextFolding;
+import dev.resumeplatform.resumeai.core.usecase.chat.AskAgentUseCase;
+import dev.resumeplatform.resumeai.core.usecase.resume.IngestResumeUseCase;
+import dev.resumeplatform.resumeai.core.usecase.resume.ListInventoryUseCase;
 import dev.resumeplatform.resumeai.support.DatabaseTest;
 import dev.resumeplatform.resumeai.support.PdfFixtures;
 
@@ -30,11 +31,11 @@ public abstract class EvalTest extends DatabaseTest {
     private static boolean populated;
 
     @Autowired
-    protected IngestionService ingestionService;
+    protected IngestResumeUseCase ingestResume;
     @Autowired
-    protected DocumentService documentService;
+    protected ListInventoryUseCase listInventory;
     @Autowired
-    protected ChatService chatService;
+    protected AskAgentUseCase askAgent;
 
     @BeforeEach
     void populatedDatabase() {
@@ -46,12 +47,12 @@ public abstract class EvalTest extends DatabaseTest {
             assumeFalse(pdfs.isEmpty(), "nenhum currículo de exemplo em " + PdfFixtures.SAMPLES_DIR);
             for (Path pdf : pdfs) {
                 try {
-                    ingestionService.ingest(pdf.getFileName().toString(), Files.readAllBytes(pdf));
+                    ingestResume.execute(pdf.getFileName().toString(), Files.readAllBytes(pdf));
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
             }
-            assertThat(documentService.listInventory()).as("esperava %d currículos ingeridos", pdfs.size())
+            assertThat(listInventory.execute()).as("esperava %d currículos ingeridos", pdfs.size())
                     .hasSize(pdfs.size());
             populated = true;
         }
@@ -61,7 +62,7 @@ public abstract class EvalTest extends DatabaseTest {
         private final String sessionId = "eval-" + UUID.randomUUID();
 
         public TurnResult ask(String question) {
-            return chatService.ask(sessionId, question);
+            return askAgent.execute(sessionId, question, AgentListener.NONE);
         }
     }
 
@@ -70,7 +71,7 @@ public abstract class EvalTest extends DatabaseTest {
     }
 
     protected List<Set<String>> realNameTokens() {
-        return documentService.listInventory().stream()
+        return listInventory.execute().stream()
                 .filter(r -> r.name() != null)
                 .map(r -> fold(r.name()))
                 .toList();

@@ -109,16 +109,51 @@ Python usa `function_calling`: o DeepSeek recusa schema nativo com 400.
 
 ## Camadas
 
+Clean Architecture com as dependências apontando para o `core`: `entrypoint` e `infra` dependem dele, ele
+não depende de nenhum dos dois. O `core` não importa JPA, Spring AI nem Micrometer — só `@Service` e as
+anotações/templates de transação do Spring.
+
 ```
-api/            → controllers finos + DTOs (records) + ApiExceptionHandler (único lugar com status HTTP)
-service/        → regra de negócio; transação programática onde há chamada de rede no meio
-db/             → entidades JPA, repositórios Spring Data, @Query/@NativeQuery e fragments Criteria
-guardrail/      → injeção, critério protegido, grounding — puros, testáveis sem Spring
-agent/          → as 4 tools, o laço do agente, o carregamento do prompt
-infra/          → factory dos modelos (papéis MAIN/WORKER/EMBEDDING) e o bucket S3
-pdf/            → PDFBox + splitter
-config/         → propriedades tipadas e o leitor de .env
+core/
+  domain/            records do negócio, chat/ (conversa do agente em tipos próprios), exception/,
+                     guardrail/ (injeção, critério protegido, grounding), chunking/, text/, settings/,
+                     service/ (etapas que mais de um use case compartilha)
+  usecase/           um caso de uso por classe (@Service), separados por domínio:
+                     resume/, candidate/, chat/, search/, health/ — use case nunca injeta outro
+  gateway/           interfaces para tudo que é externo, uma por agregado, com todas as operações
+infra/
+  gateway/           *GatewayImpl: implementam core/gateway com Spring Data, Spring AI, S3, PDFBox
+  repository/        Spring Data + fragments Criteria, entity/ (*Entity), projection/, mapper/
+  client/            factory dos modelos (papéis MAIN/WORKER/EMBEDDING) e cliente S3
+entrypoint/
+  controller/        controllers finos + request/ response/ mapper/ + sse/ (eventos do /chat/stream);
+                     ApiExceptionHandler é o único lugar com status HTTP
+  agent/tools/       as 4 tools do agente: para a aplicação o modelo é só mais um cliente, então elas
+                     chamam use cases como um controller faz
+config/              propriedades tipadas, leitor de .env e o wiring (settings, callbacks das tools)
 ```
+
+O agente é o `AskAgentUseCase`: carrega o histórico, roda o laço (critério protegido → modelo → tools com
+teto de buscas → grounding) e grava o turno. `POST /chat` e `POST /chat/stream` usam o mesmo use case;
+a tradução para eventos SSE é protocolo, então mora em `entrypoint/controller/sse/ChatStreamer`. O
+`ChatModelGateway` é a única porta do laço para o modelo: chama o LLM em streaming e executa as tools.
+
+O que o POST e o PUT de currículo compartilham (ler, validar, extrair contato e gerar embeddings; resolver
+o candidato) está em `core/domain/service/` (`ResumePreparation`, `CandidateResolution`), não num use
+case chamando outro. Os callbacks das tools chegam por um bean do
+`config/`, para que `infra` não dependa de `entrypoint`.
+
+Transação: `@Transactional` nos use cases simples; `TransactionTemplate` onde há chamada de rede no meio
+(ingerir, substituir e apagar currículo, que falam com o S3, e o chat, que não pode segurar conexão
+enquanto o LLM responde).
+
+Os `*GatewayImpl` de persistência são `@Component`, não `@Repository`: o `@Repository` liga a tradução de
+exceções no próprio gateway, e o tradutor do JPA converte até `IllegalStateException` em
+`InvalidDataAccessApiUsageException`. Os repositórios Spring Data já traduzem o que vem do banco.
+
+As colunas `tool_calls`/`tool_responses` de `chat_messages` guardam o JSON com as chaves do Spring AI
+(`id`, `type`, `name`, `arguments` / `id`, `name`, `responseData`), porque o histórico já gravado foi
+escrito assim; o `ChatMessageEntityMapper` mantém esse formato.
 
 ## Configuração
 

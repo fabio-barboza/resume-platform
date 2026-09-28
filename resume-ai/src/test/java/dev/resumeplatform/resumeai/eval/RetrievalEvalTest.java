@@ -15,19 +15,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import dev.resumeplatform.resumeai.config.ResumeAiProperties;
-import dev.resumeplatform.resumeai.db.SimilarChunkRow;
-import dev.resumeplatform.resumeai.service.CandidateService;
-import dev.resumeplatform.resumeai.service.CandidateWithResume;
-import dev.resumeplatform.resumeai.service.VectorSearchService;
+import dev.resumeplatform.resumeai.core.domain.CandidateWithResume;
+import dev.resumeplatform.resumeai.core.domain.ResumeSnippet;
+import dev.resumeplatform.resumeai.core.usecase.candidate.SearchCandidatesByNameUseCase;
+import dev.resumeplatform.resumeai.core.usecase.search.SearchSimilarChunksUseCase;
 
 class RetrievalEvalTest extends EvalTest {
     private static final int OVERFETCH = 6;
     private static final double MIN_RECALL = 0.80;
 
     @Autowired
-    VectorSearchService vectorSearch;
+    SearchSimilarChunksUseCase vectorSearch;
     @Autowired
-    CandidateService candidateService;
+    SearchCandidatesByNameUseCase searchByName;
     @Autowired
     ResumeAiProperties properties;
 
@@ -68,7 +68,7 @@ class RetrievalEvalTest extends EvalTest {
     private List<String> ranked(String question) {
         return CACHE.computeIfAbsent(question, q -> {
             List<String> seen = new ArrayList<>();
-            for (SimilarChunkRow row : vectorSearch.similaritySearch(q, kMeasured() * OVERFETCH)) {
+            for (ResumeSnippet row : vectorSearch.execute(q, kMeasured() * OVERFETCH)) {
                 if (row.candidateName() != null && !seen.contains(row.candidateName())) {
                     seen.add(row.candidateName());
                 }
@@ -96,7 +96,7 @@ class RetrievalEvalTest extends EvalTest {
     @ValueSource(strings = {"Rafael Mendes", "Márcia Oliveira", "Bruno Carvalho", "Amanda Rocha", "Vitor Lopes",
             "Marisa Ferreira"})
     void searchByProperNameReturnsTheResume(String name) {
-        List<CandidateWithResume> found = candidateService.searchByName(name);
+        List<CandidateWithResume> found = searchByName.execute(name);
         assertThat(found).extracting(CandidateWithResume::name).containsExactly(name);
         assertThat(found.getFirst().chunks()).as("%s veio sem conteúdo de currículo", name).isNotEmpty();
     }
@@ -105,12 +105,12 @@ class RetrievalEvalTest extends EvalTest {
     @CsvSource({"bruno carvalho,Bruno Carvalho", "marcia,Márcia Oliveira", "MENDES,Rafael Mendes",
             "carvalho bruno,Bruno Carvalho"})
     void searchByNameToleratesTyping(String term, String expected) {
-        assertThat(candidateService.searchByName(term)).extracting(CandidateWithResume::name).containsExactly(expected);
+        assertThat(searchByName.execute(term)).extracting(CandidateWithResume::name).containsExactly(expected);
     }
 
     @Test
     void nonexistentNameIsNotInvented() {
-        assertThat(candidateService.searchByName("Fulano Inexistente da Silva")).isEmpty();
+        assertThat(searchByName.execute("Fulano Inexistente da Silva")).isEmpty();
     }
 
     @Test

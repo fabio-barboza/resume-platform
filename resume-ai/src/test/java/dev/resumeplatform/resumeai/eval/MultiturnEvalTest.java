@@ -12,8 +12,8 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import dev.resumeplatform.resumeai.agent.TurnResult;
-import dev.resumeplatform.resumeai.guardrail.TextFolding;
+import dev.resumeplatform.resumeai.core.domain.chat.TurnResult;
+import dev.resumeplatform.resumeai.core.domain.text.TextFolding;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 

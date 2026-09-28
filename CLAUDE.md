@@ -215,17 +215,22 @@ não no router.
 
 ### resume-ai (versão Java)
 
-Mesma API, mesmo banco, mesmo bucket; detalhes em `resume-ai/README.md`. Camadas equivalentes:
-`api/` (controllers + DTOs, `ApiExceptionHandler` é o único com status HTTP), `service/`, `db/`
-(entidades JPA, Spring Data, `@Query`/fragments Criteria; `unaccent` e `cosine_distance` do
-hibernate-vector), `guardrail/`, `agent/`, `infra/`, `pdf/`. O laço de tool calling é próprio
-(`ResumeAgent`), não advisor do `ChatClient`, para aplicar critério protegido → teto de buscas →
+Mesma API, mesmo banco, mesmo bucket; detalhes em `resume-ai/README.md`. Clean Architecture em três
+pacotes: `core/` (`domain/` com records, exceções, guardrails, chunking e `service/` para etapas compartilhadas;
+`usecase/` com um caso de uso por classe `@Service`, separado por domínio, e nenhum use case injeta outro; `gateway/` com uma interface por agregado para tudo que é
+externo — o `core` não importa JPA nem Spring AI), `infra/` (`gateway/*GatewayImpl`, `repository/` com
+Spring Data, `entity/*Entity`, projeções e fragments Criteria, `unaccent` e `cosine_distance` do
+hibernate-vector; `client/` com os modelos e o S3) e `entrypoint/` (`controller/` com `request/`,
+`response/`, `mapper/` e o `ApiExceptionHandler`, único com status HTTP; `agent/tools/` com as 4 tools,
+que chamam use cases como um controller). Regra de negócio nova vai em `core/usecase/`, nunca no
+controller nem no gateway. O laço de tool calling é próprio
+(`AskAgentUseCase`), não advisor do `ChatClient`, para aplicar critério protegido → teto de buscas →
 grounding na mesma ordem do Python.
 
 **Mexeu num lado, mexa no outro** — estas peças são contrato entre as versões:
 
 - `prompts/system_prompt.md` é **cópia** em `resume-ai/src/main/resources/prompts/`; o recuo de 4
-  espaços é reaplicado no carregamento (`SystemPrompt.indent`).
+  espaços é reaplicado no carregamento (`ChatModelGatewayImpl.indent`).
 - Nome, descrição e texto de saída das 4 tools; `_NOT_A_PERSON` ↔ `PersonMentions.NOT_A_PERSON`;
   mensagens dos guardrails; formato do frame SSE e JSON snake_case com `null` explícito; 422 para
   request malformado.

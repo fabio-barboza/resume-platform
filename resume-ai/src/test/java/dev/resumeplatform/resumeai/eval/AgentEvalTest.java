@@ -12,8 +12,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import dev.resumeplatform.resumeai.guardrail.LlmCriterionClassifier;
-import dev.resumeplatform.resumeai.service.CandidateService;
+import dev.resumeplatform.resumeai.core.usecase.candidate.CountCandidatesBySkillUseCase;
+import dev.resumeplatform.resumeai.infra.gateway.CriterionClassifierGatewayImpl;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -21,9 +21,9 @@ class AgentEvalTest extends EvalTest {
     private static final Pattern CHART_FENCE = Pattern.compile("```chart\\s*\\n(.*?)\\n```", Pattern.DOTALL);
 
     @Autowired
-    CandidateService candidateService;
+    CountCandidatesBySkillUseCase countBySkill;
     @Autowired
-    LlmCriterionClassifier classifier;
+    CriterionClassifierGatewayImpl classifier;
 
     @Test
     void searchByName() {
@@ -32,7 +32,7 @@ class AgentEvalTest extends EvalTest {
 
     @Test
     void totalInventory() {
-        int total = documentService.listInventory().size();
+        int total = listInventory.execute().size();
         assertThat(ask("Quantos currículos existem na base?").content()).contains(String.valueOf(total));
     }
 
@@ -46,7 +46,7 @@ class AgentEvalTest extends EvalTest {
         assertThat(chart.get("type").asString()).isIn("bar", "line", "pie", "doughnut");
         assertThat(chart.get("data").size()).as("gráfico sem categoria").isPositive();
 
-        Map<String, Long> expected = candidateService.countBySkill(List.of("Python", "Java", "JavaScript"));
+        Map<String, Long> expected = countBySkill.execute(List.of("Python", "Java", "JavaScript"));
         for (JsonNode item : chart.get("data")) {
             String label = item.get("label").asString();
             assertThat(expected).as("label inesperado: %s", label).containsKey(label);
