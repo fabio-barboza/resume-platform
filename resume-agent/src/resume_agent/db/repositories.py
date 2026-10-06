@@ -289,7 +289,6 @@ def delete_document(session: Session, document_id: int) -> bool:
     return session.execute(stmt).first() is not None
 
 
-
 def list_chunks_by_candidate(
     session: Session, candidate_id: int
 ) -> list[dict[str, Any]]:

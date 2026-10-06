@@ -61,8 +61,7 @@ class ResumeIngestionResult(BaseModel):
     candidate_id: int | None = None
     status: str = Field(
         description=(
-            "`ingested`, `pending_review` (nenhum email identificado) ou "
-            "`failed`."
+            "`ingested`, `pending_review` (nenhum email identificado) ou `failed`."
         )
     )
     chunk_count: int = 0

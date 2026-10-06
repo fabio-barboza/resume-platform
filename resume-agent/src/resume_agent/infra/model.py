@@ -75,10 +75,12 @@ class _ObservedEmbeddings(OpenAIEmbeddings):
             metadata={"base_url": self.openai_api_base},
         ) as obs:
             embeddings, usage = self._create([text])
-            obs.update(usage_details={
-                "input": usage.get("prompt_tokens", 0),
-                "total": usage.get("total_tokens", 0),
-            })
+            obs.update(
+                usage_details={
+                    "input": usage.get("prompt_tokens", 0),
+                    "total": usage.get("total_tokens", 0),
+                }
+            )
             return embeddings[0]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -90,10 +92,12 @@ class _ObservedEmbeddings(OpenAIEmbeddings):
             metadata={"base_url": self.openai_api_base},
         ) as obs:
             embeddings, usage = self._create(texts)
-            obs.update(usage_details={
-                "input": usage.get("prompt_tokens", 0),
-                "total": usage.get("total_tokens", 0),
-            })
+            obs.update(
+                usage_details={
+                    "input": usage.get("prompt_tokens", 0),
+                    "total": usage.get("total_tokens", 0),
+                }
+            )
             return embeddings
 
 

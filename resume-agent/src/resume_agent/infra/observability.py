@@ -84,7 +84,9 @@ def _observation_cm(name: str, **kwargs):
 
         return get_client().start_as_current_observation(name=name, **kwargs)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Langfuse indisponível (%s) — observation %r ignorada.", exc, name)
+        logger.warning(
+            "Langfuse indisponível (%s) — observation %r ignorada.", exc, name
+        )
         return nullcontext(_NOOP)
 
 

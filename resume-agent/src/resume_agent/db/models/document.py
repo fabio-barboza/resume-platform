@@ -21,9 +21,7 @@ class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (Index("documents_candidate_id_idx", "candidate_id"),)
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, Identity(always=True), primary_key=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     candidate_id: Mapped[int] = mapped_column(
         BigInteger,
         # O cascade é do banco: apagar candidato leva os documentos junto sem

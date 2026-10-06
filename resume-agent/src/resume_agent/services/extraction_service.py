@@ -25,9 +25,7 @@ EXTRACTION_PAGES = int(os.getenv("EXTRACTION_PAGES", "2"))
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 # Telefone BR: DDD opcional entre parênteses, separador livre, 8 ou 9 dígitos.
-_PHONE_RE = re.compile(
-    r"(?:\+55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d{4,5}[\s.-]?\d{4}"
-)
+_PHONE_RE = re.compile(r"(?:\+55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d{4,5}[\s.-]?\d{4}")
 
 _PROMPT = """Extraia os dados de contato do candidato a partir do trecho de \
 currículo abaixo.

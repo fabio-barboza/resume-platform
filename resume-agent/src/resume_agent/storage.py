@@ -114,7 +114,9 @@ def store(filename: str, digest: str, content: bytes) -> None:
             Metadata={_HASH_META_KEY: digest},
         )
     except (ClientError, BotoCoreError):
-        logger.warning("Não foi possível guardar '%s' no bucket %s", filename, S3_BUCKET)
+        logger.warning(
+            "Não foi possível guardar '%s' no bucket %s", filename, S3_BUCKET
+        )
 
 
 def fetch(filename: str, digest: str) -> bytes | None:

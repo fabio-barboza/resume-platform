@@ -12,8 +12,6 @@ Postgres/pgvector (ver `resume_agent.db.engine`).
 import os
 from pathlib import Path
 
-PROJECT_ROOT = Path(
-    os.getenv("RESUME_AGENT_ROOT", Path(__file__).resolve().parents[2])
-)
+PROJECT_ROOT = Path(os.getenv("RESUME_AGENT_ROOT", Path(__file__).resolve().parents[2]))
 
 MIGRATIONS_DIR = PROJECT_ROOT / "migrations"
