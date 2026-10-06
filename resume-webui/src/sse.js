@@ -1,7 +1,7 @@
 // Leitor de SSE sobre `fetch` — o `EventSource` do navegador é GET-only e não
 // manda body, então não serve para `POST /chat/stream`.
 
-/** Erro de status HTTP não-2xx — `main.js` usa `.status` para decidir o fallback. */
+/** Erro de status HTTP não-2xx. */
 export class SseHttpError extends Error {
     constructor(status) {
         super(`status ${status}`)

@@ -342,10 +342,10 @@ O detalhamento de cada um, com o raciocínio por trás das escolhas, está no
 
 ## Streaming
 
-O chat responde em `text/event-stream` — o texto aparece token a token em vez de esperar a
-resposta inteira. `POST /chat` (síncrono) continua existindo para os evals, o REPL e como
-fallback; os dois endpoints compartilham a mesma lógica (`services/chat_service.py` no Python,
-`AskAgentUseCase` no Java — a tradução para frames SSE fica no `ChatStreamer`).
+O chat responde em `text/event-stream` — a tela acompanha o turno (qual ferramenta está rodando) e
+pode interrompê-lo, em vez de esperar calada pela resposta inteira. É o único endpoint de conversa;
+evals e REPL chamam o agente direto, sem HTTP. A lógica do turno fica em `services/chat_service.py`
+no Python e no `AskAgentUseCase` no Java — a tradução para frames SSE fica no `ChatStreamer`.
 
 ```
 POST /chat/stream   { session_id, message }  →  text/event-stream
@@ -358,21 +358,21 @@ Cada frame é `event: <tipo>\ndata: <json>\n\n`. Tipos, sempre nesta ordem por t
 | `start` | `{ session_id }` | sempre o primeiro |
 | `tool` | `{ name, status }` | `status` é `start`/`end` de cada tool call do agente |
 | `token` | `{ text }` | delta de texto da resposta |
-| `reset` | `{}` | o grounding descartou a resposta em andamento: a webui apaga o texto parcial e recomeça com os próximos `token` |
+| `reset` | `{}` | o grounding descartou a resposta em andamento: o cliente joga fora o texto recebido e recomeça com os próximos `token` |
 | `done` | `{ content }` | fim normal — `content` é canônico, prevalece sobre a concatenação dos tokens |
 | `error` | `{ detail }` | falha — nunca acompanha `done` |
 
 A webui (`resume-webui/src/sse.js`) lê isso sobre `fetch` porque `EventSource` só faz GET e não
-manda body. Ela separa o texto recebido em um prefixo **estável** (já vira markdown) e uma cauda
-**pendente** (fence de código aberta, tabela em construção ou última linha sem quebra) — é o que
-garante que nenhum bloco (tabela, código, link de PDF) aparece formatado com dado pela metade.
-Detalhes em [`resume-webui/src/markdown.js`](resume-webui/src/markdown.js).
+manda body. Os `token` vão para um buffer e **não** são desenhados durante o turno: o grounding só
+julga a resposta depois de gerada inteira, e renderizar ao vivo mostrava um texto que sumia e
+recomeçava. Enquanto o turno corre a tela mostra só o status da ferramenta; o texto aparece de uma
+vez no `done`, já como markdown, gráfico e botão de PDF
+([`resume-webui/src/markdown.js`](resume-webui/src/markdown.js)). O buffer serve ao botão de parar:
+interrompido o turno, é ele que vai para a tela.
 
-**Fallback**: se `/chat/stream` não existir, o proxy não deixar passar SSE, ou o navegador não
-tiver `ReadableStream`, a webui cai para `POST /chat` — mas só quando nenhum evento chegou a ser
-recebido. Se o stream já tinha entregue texto e a conexão caiu no meio, ela **não** refaz a
-pergunta (duplicaria a chamada ao LLM); mostra a resposta parcial com um aviso de conexão
-interrompida.
+**Falha de conexão**: não há endpoint alternativo. Se nenhum evento chegou a ser recebido, a webui
+mostra erro de conexão; se a conexão caiu no meio do turno, ela **não** refaz a pergunta
+(duplicaria a chamada ao LLM) e avisa que a resposta pode estar incompleta.
 
 **Gráfico** trafega como bloco de código fenceado com linguagem `chart` e um JSON dentro:
 

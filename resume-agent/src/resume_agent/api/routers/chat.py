@@ -10,36 +10,19 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from resume_agent.api.schemas.chat import (
-    ChatHistoryResponse,
-    ChatRequest,
-    ChatResponse,
-)
+from resume_agent.api.schemas.chat import ChatHistoryResponse, ChatRequest
 from resume_agent.services import chat_service
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
 @router.post(
-    "",
-    response_model=ChatResponse,
-    summary="Conversar com o agente de currículos",
-    description=(
-        "Mesmo agente do REPL, exposto por HTTP. O histórico da conversa é "
-        "persistido no Postgres por `session_id`: sobrevive a um restart e é "
-        "compartilhado entre réplicas."
-    ),
-)
-def chat(payload: ChatRequest) -> ChatResponse:
-    content = chat_service.ask(payload.session_id, payload.message)
-    return ChatResponse(content=content)
-
-
-@router.post(
     "/stream",
     summary="Conversar com o agente com resposta em streaming (SSE)",
     description=(
-        "Mesmo agente de `POST /chat`, em `text/event-stream`. Cada frame é "
+        "Mesmo agente do REPL, em `text/event-stream`. O histórico da conversa "
+        "é persistido no Postgres por `session_id`: sobrevive a um restart e é "
+        "compartilhado entre réplicas. Cada frame é "
         "`event: <tipo>\\ndata: <json>\\n\\n`. Tipos: `start` "
         "(`ChatStreamStart`, sempre primeiro), `tool` (`ChatStreamTool`, "
         "início/fim de chamada de ferramenta), `token` (`ChatStreamToken`, "

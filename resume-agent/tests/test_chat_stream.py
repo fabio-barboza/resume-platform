@@ -1,4 +1,4 @@
-"""Testes determinísticos de `POST /chat/stream` e `POST /chat`.
+"""Testes determinísticos de `POST /chat/stream` e `GET /chat/{session_id}`.
 
 Sem marcador `eval`: nenhum teste chama LLM de verdade nem toca o Postgres. O
 agente usado pelo `chat_service` é substituído por um fake, via monkeypatch de
@@ -37,9 +37,8 @@ class _FakeAgent:
     que é o motivo de a pergunta órfã existir.
     """
 
-    def __init__(self, events=None, invoke_result=None, raise_after=None):
+    def __init__(self, events=None, raise_after=None):
         self._events = events or []
-        self._invoke_result = invoke_result
         self._raise_after = raise_after
         self._threads: dict[str, list] = {}
 
@@ -83,10 +82,6 @@ class _FakeAgent:
                         message.id = f"ai-{thread}-{len(self._threads[thread])}"
                     self._threads[thread].append(message)
             yield event
-
-    def invoke(self, payload, config):
-        self._record_user_message(config, payload)
-        return self._invoke_result
 
 
 def _install_fake_agent(monkeypatch, fake):
@@ -430,17 +425,3 @@ class TestHistoricoDaTela:
 
         assert resp.status_code == 200
         assert resp.json()["messages"] == []
-
-
-class TestChatSemStream:
-    def test_post_chat_intacto(self, client, monkeypatch):
-        import resume_agent.agent as agent_module
-
-        fake_result = {"messages": [AIMessage(content="resposta sem streaming")]}
-        monkeypatch.setattr(
-            agent_module, "agent", _FakeAgent(invoke_result=fake_result)
-        )
-
-        resp = client.post("/chat", json={"session_id": "s6", "message": "oi"})
-        assert resp.status_code == 200
-        assert resp.json() == {"content": "resposta sem streaming"}

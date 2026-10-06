@@ -209,9 +209,9 @@ Sem isolamento entre sessões além do id.
 - As tabelas vêm da migração `0003`, que executa o `setup()` da lib em vez de copiar o DDL — por
   isso `langgraph-checkpoint-postgres` está preso por `==` no `pyproject.toml`.
 
-`POST /chat` (síncrono, usado pelos evals e pelo REPL) e `POST /chat/stream` (SSE, usado pela
-webui) compartilham o mesmo `services/chat_service.py` — é lá que o endereçamento da thread mora,
-não no router.
+`POST /chat/stream` (SSE) é o único endpoint de conversa: webui e contract-tests passam por ele.
+Evals e REPL chamam o agente direto (`agent.invoke` no Python, `AskAgentUseCase.execute` no Java),
+sem HTTP. O endereçamento da thread mora no `services/chat_service.py`, não no router.
 
 ### resume-ai (versão Java)
 

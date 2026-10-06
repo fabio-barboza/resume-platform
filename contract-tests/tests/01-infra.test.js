@@ -36,7 +36,6 @@ describe('infra: health, Swagger e CORS', () => {
             '/resumes/{document_id}': ['delete', 'get', 'put'],
             '/candidates/{candidate_id}': ['put'],
             '/candidates/{identifier}/resume': ['get'],
-            '/chat': ['post'],
             '/chat/stream': ['post'],
             '/chat/{session_id}': ['get'],
         }

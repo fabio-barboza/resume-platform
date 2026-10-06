@@ -186,7 +186,7 @@ Cada passada do modelo é em streaming; os deltas viram eventos `token` no
 quando termina bem — cliente que desconecta ou modelo que cai no meio não
 deixam pergunta órfã no histórico, e o turno seguinte não alucina em cima dela.
 
-`POST /chat` e `POST /chat/stream` usam o mesmo use case; a tradução para
+`POST /chat/stream` chama o `AskAgentUseCase`; a tradução para
 frames SSE (`event: <tipo>\ndata: <json>\n\n`) é protocolo, então mora no
 `ChatStreamer`, na camada de entrada.
 
@@ -504,8 +504,7 @@ como `{"detail": "..."}`.
 | DELETE | `/resumes/{document_id}` | Remove o documento e seus chunks. |
 | PUT | `/candidates/{candidate_id}` | Substitui o cadastro por inteiro. Não toca em chunks. |
 | GET | `/candidates/{id-ou-email}/resume` | Baixa o PDF do currículo, direto do bucket. |
-| POST | `/chat` | Pergunta ao agente e devolve a resposta inteira. |
-| POST | `/chat/stream` | Mesma pergunta, respondida em `text/event-stream`. |
+| POST | `/chat/stream` | Pergunta ao agente, respondida em `text/event-stream`. |
 | GET | `/chat/{session_id}` | Histórico da conversa. |
 | GET | `/health` | Saúde da aplicação e do banco. |
 

@@ -10,10 +10,6 @@ class ChatRequest(BaseModel):
     message: str = Field(description="Pergunta do usuário.")
 
 
-class ChatResponse(BaseModel):
-    content: str = Field(description="Resposta do agente em markdown.")
-
-
 # Os quatro modelos abaixo documentam o contrato de `POST /chat/stream` para o
 # Swagger. Não são usados como `response_model` — `StreamingResponse` não
 # suporta isso — mas fixam o formato de cada evento em código, não só em

@@ -16,13 +16,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import dev.resumeplatform.resumeai.core.domain.chat.AgentListener;
-import dev.resumeplatform.resumeai.core.usecase.chat.AskAgentUseCase;
 import dev.resumeplatform.resumeai.core.usecase.chat.GetChatHistoryUseCase;
 import dev.resumeplatform.resumeai.entrypoint.mapper.ResponseMapper;
 import dev.resumeplatform.resumeai.entrypoint.request.ChatRequest;
 import dev.resumeplatform.resumeai.entrypoint.response.ChatHistoryResponse;
-import dev.resumeplatform.resumeai.entrypoint.response.ChatResponse;
 import dev.resumeplatform.resumeai.entrypoint.sse.ChatEvent;
 import dev.resumeplatform.resumeai.entrypoint.sse.ChatStreamer;
 import dev.resumeplatform.resumeai.entrypoint.sse.ClientDisconnectedException;
@@ -35,31 +32,21 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag(name = "Chat")
 @Validated
 public class ChatController {
-    private final AskAgentUseCase askAgent;
     private final GetChatHistoryUseCase getChatHistory;
     private final ChatStreamer chatStreamer;
     private final JsonMapper json;
 
-    public ChatController(AskAgentUseCase askAgent, GetChatHistoryUseCase getChatHistory, ChatStreamer chatStreamer,
-            JsonMapper json) {
-        this.askAgent = askAgent;
+    public ChatController(GetChatHistoryUseCase getChatHistory, ChatStreamer chatStreamer, JsonMapper json) {
         this.chatStreamer = chatStreamer;
         this.getChatHistory = getChatHistory;
         this.json = json;
     }
 
-    @PostMapping
-    @Operation(summary = "Conversar com o agente de currículos", description = """
-            Mesmo agente do stream, sem streaming. O histórico da conversa é \
-            persistido no Postgres por `session_id`: sobrevive a um restart e é \
-            compartilhado entre réplicas.""")
-    public ChatResponse chat(@RequestBody @Validated ChatRequest payload) {
-        return new ChatResponse(askAgent.execute(payload.sessionId(), payload.message(), AgentListener.NONE).content());
-    }
-
     @PostMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Conversar com o agente com resposta em streaming (SSE)", description = """
-            Mesmo agente de `POST /chat`, em `text/event-stream`. Cada frame é \
+            Resposta em `text/event-stream`. O histórico da conversa é persistido no \
+            Postgres por `session_id`: sobrevive a um restart e é compartilhado entre \
+            réplicas. Cada frame é \
             `event: <tipo>\\ndata: <json>\\n\\n`. Tipos: `start` (`{session_id}`, sempre \
             primeiro), `tool` (`{name, status}`, início/fim de chamada de ferramenta), \
             `token` (`{text}`, delta de texto da resposta), `reset` (`{}`, descarte o \

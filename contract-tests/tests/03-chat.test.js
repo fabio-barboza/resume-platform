@@ -26,20 +26,12 @@ describe('/chat', () => {
         assert.deepEqual(history.json, { session_id: session, messages: [] })
     })
 
-    it('POST /chat sem campo obrigatório é 422', async () => {
+    it('POST /chat/stream sem campo obrigatório é 422', async () => {
         for (const body of [{ session_id: 'x' }, { message: 'oi' }]) {
-            const response = await postJson('/chat', body)
+            const response = await postJson('/chat/stream', body)
             assert.equal(response.status, 422, JSON.stringify(body))
             assert.ok('detail' in response.json)
         }
-    })
-
-    it('POST /chat devolve exatamente {"content": "<markdown>"}', { timeout: LLM_TIMEOUT }, async () => {
-        const response = await postJson('/chat', { session_id: `contrato-${uniqueId()}`, message: 'Olá! O que você faz?' })
-        assert.equal(response.status, 200, response.text)
-        assertKeys(response.json, ['content'], 'POST /chat')
-        assert.equal(typeof response.json.content, 'string')
-        assert.ok(response.json.content.length > 0)
     })
 
     it('POST /chat/stream: frames, ordem e histórico persistido', { timeout: LLM_TIMEOUT }, async () => {

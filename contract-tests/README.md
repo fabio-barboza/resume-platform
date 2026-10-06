@@ -24,8 +24,8 @@ dos dois backends "é dono" da ferramenta que o testa.
 | `/resumes` | formato exato do resultado de ingestão, falha isolada por arquivo, dedup por hash, paginação e 422, PUT no-op e 409, DELETE 204 sem corpo, cascata para o candidato órfão |
 | `/candidates` | substituição total (ausente vira `null`), 409 de email, download por id e por email com o PDF byte a byte e o `Content-Disposition` |
 | Erros | `{"detail": "..."}` com essa chave só; 404/409/422 nos mesmos casos |
-| `/chat` | `{"content"}` exato, 422 sem campo, histórico vazio para sessão nova |
-| `/chat/stream` | headers, frame `event: <tipo>\ndata: <json>\n\n`, chaves de cada evento, `start` primeiro, `done` e `error` exclusivos, `reset` + tokens reconstruindo o `done`, histórico gravado igual ao que a tela mostra |
+| `/chat/{session_id}` | histórico vazio para sessão nova |
+| `/chat/stream` | 422 sem campo, headers, frame `event: <tipo>\ndata: <json>\n\n`, chaves de cada evento, `start` primeiro, `done` e `error` exclusivos, `reset` + tokens reconstruindo o `done`, histórico gravado igual ao que a tela mostra |
 
 O conjunto de chaves é comparado **exatamente**: campo a mais numa versão também é divergência.
 

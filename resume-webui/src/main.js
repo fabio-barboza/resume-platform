@@ -532,14 +532,6 @@ function setStreamingUi(streaming) {
     sendBtn.setAttribute('aria-label', streaming ? 'Parar resposta' : 'Enviar mensagem')
 }
 
-// `/chat/stream` pode não existir (API antiga), o proxy pode não deixar
-// passar SSE, ou `ReadableStream` pode faltar. Uma vez confirmado que não dá
-// para streamar, não repete a tentativa nas próximas mensagens da sessão.
-let streamingSupported = true
-
-// Devolve `true` quando o turno foi resolvido (sucesso, erro ou cancelado) e
-// `false` quando deve cair para `runFallback` — só quando nenhum evento
-// chegou a ser recebido, para não refazer a pergunta e duplicar a resposta.
 async function runStream(msg, text) {
     const controller = new AbortController()
     activeController = controller
@@ -565,38 +557,22 @@ async function runStream(msg, text) {
             if (event === 'done') msg.finish(data.content)
             if (event === 'error') msg.fail(data.detail)
         }
-        return true
     } catch (err) {
         if (err.name === 'AbortError') {
             msg.finish(msg.getText(), { interrupted: true })
-            return true
+            return
         }
 
-        if (!receivedEvent) {
-            streamingSupported = false
-            return false
-        }
-
-        msg.fail('Conexão com o agente caiu. A resposta acima pode estar incompleta.')
-        return true
+        // Sem nenhum evento, a requisição nem chegou ao agente: API fora do
+        // ar, rota inexistente ou payload recusado.
+        msg.fail(
+            receivedEvent
+                ? 'Conexão com o agente caiu. A resposta acima pode estar incompleta.'
+                : 'Erro ao conectar com o agente.'
+        )
     } finally {
         activeController = null
         setStreamingUi(false)
-    }
-}
-
-async function runFallback(msg, text) {
-    try {
-        const response = await fetch(CHAT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId, message: text }),
-        })
-        if (!response.ok) throw new Error(`status ${response.status}`)
-        const data = await response.json()
-        msg.finish(data.content)
-    } catch {
-        msg.fail('Erro ao conectar com o agente.')
     }
 }
 
@@ -614,8 +590,7 @@ async function sendMessage() {
 
     const msg = addStreamingMessage()
 
-    const handled = streamingSupported ? await runStream(msg, text) : false
-    if (!handled) await runFallback(msg, text)
+    await runStream(msg, text)
 
     input.focus()
 }

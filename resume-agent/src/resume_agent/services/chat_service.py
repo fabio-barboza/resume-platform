@@ -137,22 +137,6 @@ def history(session_id: str) -> list[dict[str, str]]:
     return turns
 
 
-def ask(session_id: str, message: str) -> str:
-    """Um turno sem streaming: invoke + checkpoint. Usado por `POST /chat`."""
-    from resume_agent.agent import agent
-
-    config = _config(session_id)
-    previous_ids = _message_ids(agent, config)
-    try:
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": message}]}, config
-        )
-    except Exception:
-        _rollback_turn(agent, config, previous_ids)
-        raise
-    return result["messages"][-1].content
-
-
 def stream_answer(session_id: str, message: str) -> Iterator[tuple[str, dict]]:
     """Percorre o stream do agente e traduz em eventos `(event_type, payload)`.
 

@@ -238,19 +238,8 @@ class ChatStreamTest extends DatabaseTest {
     }
 
     @Test
-    void postChatReturnsContent() throws Exception {
-        script("resposta sem streaming");
-
-        String body = mvc.perform(post("/chat").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"session_id\": \"" + session() + "\", \"message\": \"oi\"}"))
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-
-        assertThat(JSON.readTree(body).get("content").asString()).isEqualTo("resposta sem streaming");
-    }
-
-    @Test
     void missingFieldIsUnprocessable() throws Exception {
-        var response = mvc.perform(post("/chat").contentType(MediaType.APPLICATION_JSON).content("{\"message\": \"oi\"}"))
+        var response = mvc.perform(post("/chat/stream").contentType(MediaType.APPLICATION_JSON).content("{\"message\": \"oi\"}"))
                 .andReturn().getResponse();
         assertThat(response.getStatus()).isEqualTo(422);
         assertThat(JSON.readTree(response.getContentAsString(StandardCharsets.UTF_8)).has("detail")).isTrue();
