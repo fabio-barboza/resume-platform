@@ -106,9 +106,9 @@ compartilhada pelos dois.
                              │
      ┌──────────────┬────────┴─────────┬──────────────────┬────────────────────┐
      ▼              ▼                  ▼                  ▼                    ▼
- LLM :8200     Embeddings :8892   PostgreSQL 18 :5432   MinIO :9000         Langfuse :8060
+ LLM :4000     Embeddings :4000   PostgreSQL 18 :5432   MinIO :9000         Langfuse :8060
  OpenAI-compat OpenAI-compat      pgvector + HNSW       PDFs originais      traces (opcional)
- (qwen3.6:35b) (qwen3-emb-0.6b)   mesmo schema          mesmo bucket        fora desta stack
+ (chat)        (embedding)       mesmo schema          mesmo bucket        fora desta stack
  externo       externo            ← infra/docker-compose.yaml ─┘
 ```
 
@@ -231,10 +231,9 @@ O que é dos dois fica na raiz, fora de qualquer um deles:
 - **Docker** com o plugin Compose v2, daemon rodando
 - **Uma LLM e um modelo de embeddings** com API compatível com OpenAI, acessíveis pelo agent
 
-O `.env.example` já vem apontado para modelos locais (`qwen3.6:35b` em `http://localhost:8200` e
-`qwen3-embedding-0.6b` em `http://localhost:8892`), que é como esta demo foi construída — sem custo
-e sem currículo saindo da máquina. Para um provedor na nuvem, troque `MAIN_MODEL*`,
-`WORKER_MODEL*` e `EMBEDDING_MODEL*` no `.env` (`resume-agent/.env` ou `resume-ai/.env`, conforme o
+Serve qualquer endpoint compatível com a OpenAI: gateway (LiteLLM), servidor local (vLLM,
+llama.cpp, Ollama) ou provedor na nuvem. O código não tem valor padrão para os modelos: preencha
+`MAIN_MODEL*`, `WORKER_MODEL*` e `EMBEDDING_MODEL*` no `.env` (`resume-agent/.env` ou `resume-ai/.env`, conforme o
 backend); nenhum código muda.
 
 Os modelos são o único pré-requisito opcional na subida: o script avisa e sobe a stack mesmo assim,
@@ -551,7 +550,7 @@ Roteiro de demo e teste de fumaça, com o navegador em <http://localhost:5173> e
 |---------|----------------|-------|
 | `porta 5432 (Postgres) ocupada por outro processo` | Postgres de outro projeto ou nativo | `docker ps` mostra quem; pare o container ou o serviço |
 | `porta 8000/5173 já está ocupada` | app da execução anterior ficou de pé | `lsof -i :8000` e mate o processo |
-| `AVISO: LLM não respondeu` | modelo fora do ar | suba o endpoint em `http://localhost:8200`; a stack não precisa reiniciar |
+| `AVISO: LLM não respondeu` | modelo fora do ar | confira o endpoint em `MAIN_MODEL_BASE_URL`; a stack não precisa reiniciar |
 | `AVISO: embeddings não responderam` | modelo de embedding fora do ar | busca e ingestão falham até ele voltar; o resto sobe |
 | `falha ao aplicar as migrações` | Postgres subiu mas as credenciais não batem | confira `POSTGRES_*` no `.env` contra o volume já existente |
 | `java não encontrado` / `o resume-ai precisa do 21 ou superior` | JDK ausente ou antigo (com `--java`) | instale o JDK 21+ e confira `java -version` |

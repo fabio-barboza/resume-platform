@@ -93,12 +93,12 @@ máquina, e é justamente o que impede escalar horizontalmente.
 
 ### Modelos
 
-| Papel | Modelo | Observação |
-|---|---|---|
-| Conversa, tool calling e extração | **Qwen3.6 35B, quantizado em 4 bits** | roda **local**, servido por endpoint compatível com a API da OpenAI |
-| Embeddings | **Qwen3-Embedding-0.6B** | 1024 dimensões |
+| Papel | Requisito |
+|---|---|
+| Conversa, tool calling e extração | modelo de chat com suporte a tool calling, servido por endpoint compatível com a API da OpenAI |
+| Embeddings | modelo de embedding de 1024 dimensões (a dimensão está na coluna — outra exige migração) |
 
-**Nada aqui está preso a esse modelo.** A camada de modelos (`infra/model.py`)
+**Nada aqui está preso a um modelo específico.** A camada de modelos (`infra/model.py`)
 lê tudo do `.env` — modelo, `base_url`, provider e chave — e há papéis
 separados (`MAIN_*` e `WORKER_*`) que podem apontar para provedores diferentes.
 Trocar por GPT, Claude, Gemini ou qualquer outro é mudar variável de ambiente,

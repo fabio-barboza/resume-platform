@@ -90,21 +90,21 @@ resume:
     max-tool-calls-per-question: ${MAX_TOOL_CALLS_PER_QUESTION:5}
     candidates-per-search: ${CANDIDATES_PER_SEARCH:8}
   main:
-    name: ${MAIN_MODEL:qwen3.6:35B}
-    base-url: ${MAIN_MODEL_BASE_URL:${MODEL_BASE_URL:http://localhost:8200/v1}}
-    api-key: ${MAIN_MODEL_API_KEY:${MODEL_API_KEY:not-needed}}
-    provider: ${MAIN_MODEL_PROVIDER:${MODEL_PROVIDER:openai}}
+    name: ${MAIN_MODEL}
+    base-url: ${MAIN_MODEL_BASE_URL:${MODEL_BASE_URL}}
+    api-key: ${MAIN_MODEL_API_KEY:${MODEL_API_KEY}}
+    provider: ${MAIN_MODEL_PROVIDER:${MODEL_PROVIDER}}
     extra-body: ${MAIN_MODEL_EXTRA_BODY:{}}
   worker:
-    name: ${WORKER_MODEL:qwen3.6:35B}
-    base-url: ${WORKER_MODEL_BASE_URL:${MODEL_BASE_URL:http://localhost:8200/v1}}
-    api-key: ${WORKER_MODEL_API_KEY:${MODEL_API_KEY:not-needed}}
-    provider: ${WORKER_MODEL_PROVIDER:${MODEL_PROVIDER:openai}}
+    name: ${WORKER_MODEL}
+    base-url: ${WORKER_MODEL_BASE_URL:${MODEL_BASE_URL}}
+    api-key: ${WORKER_MODEL_API_KEY:${MODEL_API_KEY}}
+    provider: ${WORKER_MODEL_PROVIDER:${MODEL_PROVIDER}}
     extra-body: ${WORKER_MODEL_EXTRA_BODY:{}}
   embedding:
-    name: ${EMBEDDING_MODEL:qwen3-embedding-0.6b}
-    base-url: ${EMBEDDING_MODEL_BASE_URL:http://localhost:8892/v1}
-    api-key: ${EMBEDDING_MODEL_API_KEY:${MODEL_API_KEY:not-needed}}
+    name: ${EMBEDDING_MODEL}
+    base-url: ${EMBEDDING_MODEL_BASE_URL}
+    api-key: ${EMBEDDING_MODEL_API_KEY:${MODEL_API_KEY}}
     dim: ${EMBEDDING_DIM:1024}
   storage:
     access-key-id: ${AWS_ACCESS_KEY_ID:minio}

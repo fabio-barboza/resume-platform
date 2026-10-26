@@ -209,8 +209,10 @@ check_ports() {
 }
 
 check_llm() {
-    local main_url="${MAIN_MODEL_BASE_URL:-http://localhost:8200/v1}"
-    local embed_url="${EMBEDDING_MODEL_BASE_URL:-http://localhost:8892/v1}"
+    local main_url="${MAIN_MODEL_BASE_URL:-}"
+    local embed_url="${EMBEDDING_MODEL_BASE_URL:-}"
+    [ -n "$main_url" ] || fail "MAIN_MODEL_BASE_URL não configurada em $APP_NAME/.env — aponte para o endpoint dos modelos."
+    [ -n "$embed_url" ] || fail "EMBEDDING_MODEL_BASE_URL não configurada em $APP_NAME/.env — aponte para o endpoint dos modelos."
 
     if curl -s -o /dev/null --max-time 3 "$main_url/models"; then
         info "LLM respondendo em $main_url"
