@@ -15,25 +15,34 @@ load_dotenv()
 # viver em provedores diferentes: cada papel tem seu próprio endpoint, chave,
 # provider e modelo. As variáveis genéricas (MODEL_*) servem de fallback
 # quando as específicas não existem, então apontar os dois para o mesmo
-# provedor continua sendo um só valor.
-_DEFAULT_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:8200/v1")
-_DEFAULT_API_KEY = os.getenv("MODEL_API_KEY", "not-needed")
-_DEFAULT_PROVIDER = os.getenv("MODEL_PROVIDER", "openai")
+# provedor continua sendo um só valor. Não há valor padrão no código: modelo,
+# endpoint, chave e provider vêm do .env, e faltar um deles é erro na subida.
+
+
+def _required(*names: str) -> str:
+    """Devolve a primeira variável definida entre `names`; nenhuma definida é erro."""
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    raise RuntimeError(
+        f"variável de ambiente {names[0]} não configurada — confira o .env"
+    )
 
 
 def _role_config(role: str) -> dict:
     """Lê a config de um papel (MAIN/WORKER), caindo nos genéricos.
 
-    O parâmetro que desliga o raciocínio muda de modelo para modelo (Qwen usa
-    `chat_template_kwargs.enable_thinking`, DeepSeek usa `thinking.type`), então
+    O parâmetro que desliga o raciocínio muda de modelo para modelo (uns usam
+    `chat_template_kwargs.enable_thinking`, outros `thinking.type`), então
     fica no .env como JSON cru (`{role}_MODEL_EXTRA_BODY`) em vez de hardcoded —
     trocar de modelo é só trocar a variável, sem tocar em código.
     """
     return {
-        "model": os.getenv(f"{role}_MODEL", "qwen3.6:35B"),
-        "base_url": os.getenv(f"{role}_MODEL_BASE_URL", _DEFAULT_BASE_URL),
-        "api_key": os.getenv(f"{role}_MODEL_API_KEY", _DEFAULT_API_KEY),
-        "provider": os.getenv(f"{role}_MODEL_PROVIDER", _DEFAULT_PROVIDER),
+        "model": _required(f"{role}_MODEL"),
+        "base_url": _required(f"{role}_MODEL_BASE_URL", "MODEL_BASE_URL"),
+        "api_key": _required(f"{role}_MODEL_API_KEY", "MODEL_API_KEY"),
+        "provider": _required(f"{role}_MODEL_PROVIDER", "MODEL_PROVIDER"),
         "extra_body": json.loads(os.getenv(f"{role}_MODEL_EXTRA_BODY", "{}")),
     }
 
@@ -41,9 +50,9 @@ def _role_config(role: str) -> dict:
 _MAIN = _role_config("MAIN")
 _WORKER = _role_config("WORKER")
 
-_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen3-embedding-0.6b")
-_EMBEDDING_BASE_URL = os.getenv("EMBEDDING_MODEL_BASE_URL", "http://localhost:8892/v1")
-_EMBEDDING_API_KEY = os.getenv("EMBEDDING_MODEL_API_KEY", _DEFAULT_API_KEY)
+_EMBEDDING_MODEL = _required("EMBEDDING_MODEL")
+_EMBEDDING_BASE_URL = _required("EMBEDDING_MODEL_BASE_URL")
+_EMBEDDING_API_KEY = _required("EMBEDDING_MODEL_API_KEY", "MODEL_API_KEY")
 
 
 class _ObservedEmbeddings(OpenAIEmbeddings):
@@ -170,7 +179,7 @@ class Model:
 
     @staticmethod
     def get_embedding_model():
-        """Embeddings Qwen3-Embedding-0.6B-Q8_0 (EMBEDDING_MODEL* no .env)."""
+        """Modelo de embeddings configurado em EMBEDDING_MODEL* no .env."""
         key = ("embedding", _EMBEDDING_BASE_URL, _EMBEDDING_MODEL)
         if key not in Model._instances:
             Model._instances[key] = _ObservedEmbeddings(

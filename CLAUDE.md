@@ -56,9 +56,11 @@ cd ../contract-tests && npm test         # contrato HTTP contra o backend no ar 
 Compartilhado pelos dois backends, na raiz: `infra/docker-compose.yaml` (o `name: resume-agent` fixo
 mantém os volumes antigos — não mude), `resumes_samples/` e `contract-tests/`.
 
-Os **modelos são externos e não sobem pelo compose**: LLM em `MAIN_MODEL_BASE_URL`
-(`http://localhost:8200/v1` por padrão) e embeddings em `EMBEDDING_MODEL_BASE_URL`
-(`http://localhost:8892/v1`). A stack sobe sem eles; chat e ingestão falham até voltarem.
+Os **modelos são externos e não sobem pelo compose**: qualquer endpoint compatível com a API da
+OpenAI, configurado em `MAIN_MODEL_BASE_URL`, `WORKER_MODEL_BASE_URL` e `EMBEDDING_MODEL_BASE_URL`.
+O código não tem valor padrão para modelo, endpoint, chave nem provider: variável faltando é erro
+na subida. O nome do modelo é o id que o endpoint expõe (`GET /v1/models` lista).
+A stack sobe sem eles; chat e ingestão falham até voltarem.
 
 `cp resume-agent/.env.example resume-agent/.env` é pré-requisito de tudo. O `.env.example` é a
 documentação viva das variáveis — mudou config, atualize-o.

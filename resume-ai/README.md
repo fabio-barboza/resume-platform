@@ -102,12 +102,12 @@ sem tocar em código. Guardar arquivo em disco local prenderia a aplicação a u
 
 ### Modelos
 
-| Papel | Modelo | Observação |
-|---|---|---|
-| Conversa, tool calling e extração | **Qwen3.6 35B, quantizado em 4 bits** | roda **local**, servido por endpoint compatível com a API da OpenAI |
-| Embeddings | **Qwen3-Embedding-0.6B** | 1024 dimensões |
+| Papel | Requisito |
+|---|---|
+| Conversa, tool calling e extração | modelo de chat com suporte a tool calling, servido por endpoint compatível com a API da OpenAI |
+| Embeddings | modelo de embedding de 1024 dimensões (a dimensão está na coluna — outra exige migração) |
 
-**Nada aqui está preso a esse modelo.** A factory de modelos
+**Nada aqui está preso a um modelo específico.** A factory de modelos
 (`config/ModelConfig`) lê tudo do `.env` — modelo, `base_url`, chave e
 corpo extra da requisição — e há papéis separados (`MAIN_*`, `WORKER_*` e
 `EMBEDDING_*`) que podem apontar para provedores diferentes. Trocar por GPT,

@@ -219,8 +219,10 @@ function Test-Ports {
 }
 
 function Test-Llm {
-    $mainUrl  = if ($env:MAIN_MODEL_BASE_URL) { $env:MAIN_MODEL_BASE_URL } else { 'http://localhost:8200/v1' }
-    $embedUrl = if ($env:EMBEDDING_MODEL_BASE_URL) { $env:EMBEDDING_MODEL_BASE_URL } else { 'http://localhost:8892/v1' }
+    $mainUrl  = $env:MAIN_MODEL_BASE_URL
+    $embedUrl = $env:EMBEDDING_MODEL_BASE_URL
+    if (-not $mainUrl)  { Fail "MAIN_MODEL_BASE_URL não configurada em $AppName\.env — aponte para o endpoint dos modelos." }
+    if (-not $embedUrl) { Fail "EMBEDDING_MODEL_BASE_URL não configurada em $AppName\.env — aponte para o endpoint dos modelos." }
 
     try {
         Invoke-WebRequest -Uri "$mainUrl/models" -TimeoutSec 3 -UseBasicParsing | Out-Null

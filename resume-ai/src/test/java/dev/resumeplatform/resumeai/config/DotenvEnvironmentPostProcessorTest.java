@@ -16,7 +16,7 @@ class DotenvEnvironmentPostProcessorTest {
         Path file = dir.resolve(".env");
         Files.writeString(file, """
                 # comentário
-                MAIN_MODEL=qwen3.6:35B
+                MAIN_MODEL=chat-model:latest
                 MAIN_MODEL_EXTRA_BODY={"chat_template_kwargs": {"enable_thinking": false}}
                 LANGFUSE_SECRET_KEY="sk-lf-123"
                 export API_PORT=8000
@@ -26,7 +26,7 @@ class DotenvEnvironmentPostProcessorTest {
 
         Map<String, Object> values = DotenvEnvironmentPostProcessor.readDotenvFile(file);
 
-        assertThat(values).containsEntry("MAIN_MODEL", "qwen3.6:35B")
+        assertThat(values).containsEntry("MAIN_MODEL", "chat-model:latest")
                 .containsEntry("MAIN_MODEL_EXTRA_BODY", "{\"chat_template_kwargs\": {\"enable_thinking\": false}}")
                 .containsEntry("LANGFUSE_SECRET_KEY", "sk-lf-123")
                 .containsEntry("API_PORT", "8000")
